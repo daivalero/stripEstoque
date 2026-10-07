@@ -11,7 +11,11 @@ Sistema web/PWA para conferência e organização do estoque físico de uma meta
 
 ## Fase atual
 
-**Fase 1** — arquitetura, design system, login, layout e dashboard.
+**Fase 2** — banco (migrations + RLS), importação de planilha Excel, listagem de estoque,
+busca e tela do material. (A Fase 1 — arquitetura, design system, login, layout e
+dashboard — já está concluída.)
+
+Para aplicar as migrations no Supabase, veja [`supabase/README.md`](supabase/README.md).
 
 ## Como rodar
 
@@ -35,4 +39,5 @@ npm run dev
 
 - Sem as chaves do Supabase, a tela de login aparece, mas a autenticação não funciona.
 - Nunca coloque `SUPABASE_SERVICE_ROLE_KEY` no frontend.
-- Scanner, Excel, inventário e PWA entram nas fases seguintes.
+- Para importar planilhas o usuário precisa ter `role = 'admin'` em `profiles`.
+- Scanner, conferência, inventário, exportação e PWA entram nas fases seguintes.

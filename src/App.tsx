@@ -10,6 +10,7 @@ import { Estoque } from '@/pages/Estoque'
 import { Importar } from '@/pages/Importar'
 import { Inventario } from '@/pages/Inventario'
 import { Login } from '@/pages/Login'
+import { Produto } from '@/pages/Produto'
 import { Scanner } from '@/pages/Scanner'
 
 export default function App() {
@@ -30,6 +31,7 @@ export default function App() {
               <Route index element={<Dashboard />} />
               <Route path="scanner" element={<Scanner />} />
               <Route path="estoque" element={<Estoque />} />
+              <Route path="estoque/:id" element={<Produto />} />
               <Route path="historico" element={<Alteracoes />} />
               <Route path="importar" element={<Importar />} />
               <Route path="inventario" element={<Inventario />} />

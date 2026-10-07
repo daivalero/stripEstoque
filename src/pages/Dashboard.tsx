@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -11,6 +12,8 @@ import {
 import { Card } from '@/components/ui/Card'
 import { MaterialBadge } from '@/components/estoque/MaterialBadge'
 import { useAuth } from '@/hooks/useAuth'
+import { useImportacaoAtiva } from '@/hooks/useImportacaoAtiva'
+import { contarPorMaterial } from '@/services/estoque'
 import type { MaterialTipo } from '@/types'
 
 const quickActions = [
@@ -61,6 +64,28 @@ const item = {
 
 export function Dashboard() {
   const { displayName, isDemo } = useAuth()
+  const { importacao } = useImportacaoAtiva()
+  const [contagens, setContagens] = useState<Record<MaterialTipo, number> | null>(null)
+  const importacaoId = importacao?.id
+
+  useEffect(() => {
+    if (!importacaoId) return
+
+    let ativo = true
+    contarPorMaterial(importacaoId)
+      .then((resultado) => {
+        if (ativo) setContagens(resultado)
+      })
+      .catch(() => {
+        if (ativo) setContagens(null)
+      })
+
+    return () => {
+      ativo = false
+    }
+  }, [importacaoId])
+
+  const contagemVisivel = importacaoId ? contagens : null
 
   return (
     <motion.div
@@ -161,12 +186,16 @@ export function Dashboard() {
                 className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
               >
                 <MaterialBadge tipo={tipo} />
-                <span className="text-sm text-text-muted">—</span>
+                <span className="text-sm font-semibold text-text">
+                  {contagemVisivel ? contagemVisivel[tipo].toLocaleString('pt-BR') : '—'}
+                </span>
               </li>
             ))}
           </ul>
           <p className="mt-3 text-xs text-text-muted">
-            Contagens disponíveis após importar o estoque
+            {importacao
+              ? 'Itens do estoque importado'
+              : 'Contagens disponíveis após importar o estoque'}
           </p>
         </Card>
       </motion.section>
@@ -178,7 +207,10 @@ export function Dashboard() {
         aria-label="Resumo operacional"
       >
         {[
-          { label: 'Itens importados', value: '—' },
+          {
+            label: 'Itens importados',
+            value: importacao ? importacao.total_itens.toLocaleString('pt-BR') : '—',
+          },
           { label: 'Conferências hoje', value: '—' },
           { label: 'Divergências', value: '—' },
         ].map((stat) => (
