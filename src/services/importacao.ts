@@ -33,7 +33,11 @@ export async function importarEstoque(resultado: ResultadoLeitura): Promise<stri
     if (error.code === '42501') {
       throw new Error('Apenas administradores podem importar estoque.')
     }
-    throw new Error('Não foi possível importar o estoque. Nenhum dado foi gravado.')
+    console.error('Falha em importar_estoque', error)
+    const detalhe = [error.code, error.message].filter(Boolean).join(' — ')
+    throw new Error(
+      `Não foi possível importar o estoque. Nenhum dado foi gravado.${detalhe ? ` (${detalhe})` : ''}`,
+    )
   }
 
   return data as string
