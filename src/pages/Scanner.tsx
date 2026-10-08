@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BarcodeScanner } from '@/components/scanner/BarcodeScanner'
+import { BarcodeScanner, lerCodigoDeArquivo } from '@/components/scanner/BarcodeScanner'
 import { ItemCard } from '@/components/estoque/ItemCard'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -15,11 +15,14 @@ export function Scanner() {
   const [buscando, setBuscando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [opcoes, setOpcoes] = useState<EstoqueItem[]>([])
+  const [codigoLido, setCodigoLido] = useState('')
+  const arquivoRef = useRef<HTMLInputElement>(null)
 
   async function procurar(valor: string) {
     const termo = valor.trim()
     if (!termo) return
 
+    setCodigoLido(termo)
     setBuscando(true)
     setErro(null)
     setOpcoes([])
@@ -32,7 +35,7 @@ export function Scanner() {
         return
       }
       if (itens.length === 0) {
-        setErro('Código não encontrado no estoque importado.')
+        setErro(`Código ${termo} não encontrado no estoque importado.`)
         return
       }
       setOpcoes(itens)
@@ -47,7 +50,28 @@ export function Scanner() {
     setErro(null)
     setOpcoes([])
     setCodigo('')
+    setCodigoLido('')
     setCameraAtiva(true)
+  }
+
+  async function lerFoto(arquivo: File) {
+    setErro(null)
+    setBuscando(true)
+    setCameraAtiva(false)
+    try {
+      const lido = await lerCodigoDeArquivo(arquivo)
+      if (!lido) {
+        setErro('Não consegui ler o código nessa foto.')
+        setBuscando(false)
+        setCameraAtiva(true)
+        return
+      }
+      await procurar(lido)
+    } catch {
+      setErro('Não consegui ler o código nessa foto. Chegue mais perto e tente de novo.')
+      setBuscando(false)
+      setCameraAtiva(true)
+    }
   }
 
   return (
@@ -69,7 +93,9 @@ export function Scanner() {
 
       {buscando && (
         <Card padding="md">
-          <p className="text-sm text-text-secondary">Buscando código...</p>
+          <p className="text-sm text-text-secondary">
+            Buscando {codigoLido || 'código'}...
+          </p>
         </Card>
       )}
 
@@ -109,6 +135,28 @@ export function Scanner() {
         <Button type="submit" size="lg" fullWidth loading={buscando}>
           Buscar código
         </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="lg"
+          fullWidth
+          disabled={buscando}
+          onClick={() => arquivoRef.current?.click()}
+        >
+          Ler foto do código
+        </Button>
+        <input
+          ref={arquivoRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(event) => {
+            const arquivo = event.target.files?.[0]
+            event.target.value = ''
+            if (arquivo) void lerFoto(arquivo)
+          }}
+        />
       </form>
     </div>
   )
