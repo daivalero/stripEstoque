@@ -44,8 +44,9 @@ function criarLeitorNativo(): LeitorNativo | null {
 }
 
 function codigoDeEtiqueta(codigo: string): string | null {
-  const texto = codigo.trim()
-  if (/^\d{2,4};\d+\/\d+;\d+/.test(texto)) return texto
+  const texto = codigo.trim().replace(/^\]C\d/, '')
+  const etiqueta = texto.match(/\d{2,4};\d+\/\d+;\d+/)
+  if (etiqueta) return etiqueta[0]
   if (/^\d{4,}\/\d+$/.test(texto)) return texto
   return null
 }
@@ -136,8 +137,8 @@ export function BarcodeScanner({ ativo, onDetect, onErro }: BarcodeScannerProps)
       const escala = Math.max(videoBox.width / largura, videoBox.height / altura)
       const deslocamentoX = (videoBox.width - largura * escala) / 2
       const deslocamentoY = (videoBox.height - altura * escala) / 2
-      const folgaX = quadroBox.width * 0.06
-      const folgaY = quadroBox.height * 0.7
+      const folgaX = quadroBox.width * 0.08
+      const folgaY = quadroBox.height * 0.35
 
       return limitar(
         {
@@ -153,8 +154,8 @@ export function BarcodeScanner({ ativo, onDetect, onErro }: BarcodeScannerProps)
 
     function desenhar(recorte: Recorte) {
       if (!contexto) return
-      const limite = 900
-      const escala = recorte.w > limite ? limite / recorte.w : 1
+      const alvo = 1700
+      const escala = recorte.w < alvo ? alvo / recorte.w : 1
       canvas.width = Math.max(1, Math.floor(recorte.w * escala))
       canvas.height = Math.max(1, Math.floor(recorte.h * escala))
       contexto.imageSmoothingEnabled = false
@@ -171,24 +172,36 @@ export function BarcodeScanner({ ativo, onDetect, onErro }: BarcodeScannerProps)
       )
     }
 
-    async function lerCanvas(): Promise<string | null> {
-      const nativoPromise = nativo
-        ? nativo
-            .detect(canvas)
-            .then((achados) => escolherCodigo(achados.map((item) => item.rawValue ?? '')))
-            .catch(() => null)
-        : Promise.resolve(null)
+    function realcar() {
+      if (!contexto || canvas.width === 0) return
+      const imagem = contexto.getImageData(0, 0, canvas.width, canvas.height)
+      const dados = imagem.data
+      for (let i = 0; i < dados.length; i += 4) {
+        const cinza = dados[i] * 0.299 + dados[i + 1] * 0.587 + dados[i + 2] * 0.114
+        const forte = Math.max(0, Math.min(255, (cinza - 60) * 2.1))
+        dados[i] = forte
+        dados[i + 1] = forte
+        dados[i + 2] = forte
+      }
+      contexto.putImageData(imagem, 0, 0)
+    }
 
-      const zxingPromise = Promise.resolve().then(() => {
-        try {
-          return codigoDeEtiqueta(leitor.decodeFromCanvas(canvas).getText())
-        } catch {
-          return null
-        }
-      })
+    function lerZxing(): string | null {
+      try {
+        return codigoDeEtiqueta(leitor.decodeFromCanvas(canvas).getText())
+      } catch {
+        return null
+      }
+    }
 
-      const [peloNativo, peloZxing] = await Promise.all([nativoPromise, zxingPromise])
-      return peloNativo ?? peloZxing
+    async function lerVideoNativo(): Promise<string | null> {
+      if (!nativo) return null
+      try {
+        const achados = await nativo.detect(elemento)
+        return escolherCodigo(achados.map((item) => item.rawValue ?? ''))
+      } catch {
+        return null
+      }
     }
 
     function aceitar(codigo: string) {
@@ -210,8 +223,17 @@ export function BarcodeScanner({ ativo, onDetect, onErro }: BarcodeScannerProps)
 
       ocupado = true
       try {
+        const leituraVideo = lerVideoNativo()
         desenhar(base)
-        const codigo = await lerCanvas()
+        const direto = lerZxing()
+        if (direto) {
+          aceitar(direto)
+          return
+        }
+        realcar()
+        const reforcado = lerZxing()
+        const doVideo = await leituraVideo
+        const codigo = reforcado ?? doVideo
         if (codigo) {
           aceitar(codigo)
           return
@@ -250,17 +272,22 @@ export function BarcodeScanner({ ativo, onDetect, onErro }: BarcodeScannerProps)
         const faixa = stream.getVideoTracks()[0]
         faixaRef.current = faixa ?? null
         const recursos = faixa?.getCapabilities?.() as
-          | { focusMode?: string[]; torch?: boolean }
+          | { focusMode?: string[]; exposureMode?: string[]; torch?: boolean }
           | undefined
-        if (faixa && recursos?.focusMode?.includes('continuous')) {
-          await faixa.applyConstraints({
-            advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet],
-          })
+        const ajustes: MediaTrackConstraintSet[] = []
+        if (recursos?.focusMode?.includes('continuous')) {
+          ajustes.push({ focusMode: 'continuous' } as MediaTrackConstraintSet)
+        }
+        if (recursos?.exposureMode?.includes('continuous')) {
+          ajustes.push({ exposureMode: 'continuous' } as MediaTrackConstraintSet)
+        }
+        if (faixa && ajustes.length > 0) {
+          await faixa.applyConstraints({ advanced: ajustes })
         }
         if (recursos?.torch) setTemLanterna(true)
 
         if (!parado) {
-          setStatus('Encaixe a barra no quadro')
+          setStatus('Encha o quadro com a barra')
           void lerQuadro()
         }
       } catch {
@@ -307,7 +334,7 @@ export function BarcodeScanner({ ativo, onDetect, onErro }: BarcodeScannerProps)
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div
           ref={quadroRef}
-          className="relative h-24 w-[92%] rounded-xl border-[3px] border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
+          className="relative h-36 w-[96%] rounded-xl border-[3px] border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
         >
           <div className="absolute inset-x-3 top-1/2 h-0.5 -translate-y-1/2 bg-white" />
         </div>

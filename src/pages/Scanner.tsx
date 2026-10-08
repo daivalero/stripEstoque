@@ -86,7 +86,7 @@ export function Scanner() {
         <h2 className="text-[1.65rem] font-extrabold tracking-tight text-text">
           Escanear material
         </h2>
-        <p className="mt-1 text-[15px] text-text-secondary">Encaixe a barra no quadro</p>
+        <p className="mt-1 text-[15px] text-text-secondary">Encha o quadro com a barra</p>
       </div>
 
       {cameraAtiva && (
