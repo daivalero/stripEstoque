@@ -1,0 +1,137 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+
+  --color-bg: #0b1220;
+  --color-bg-elevated: #111827;
+  --color-bg-card: #151d2d;
+  --color-bg-card-hover: #1a2438;
+  --color-bg-muted: #1c2638;
+
+  --color-text: #f8fafc;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+
+  --color-border: rgb(255 255 255 / 0.08);
+  --color-border-strong: rgb(255 255 255 / 0.14);
+
+  --color-primary: #5b55f7;
+  --color-primary-soft: #6366f1;
+  --color-primary-hover: #4f49e8;
+
+  --color-success: #22c55e;
+  --color-success-soft: rgb(34 197 94 / 0.12);
+  --color-warning: #f59e0b;
+  --color-warning-soft: rgb(245 158 11 / 0.12);
+  --color-danger: #f43f5e;
+  --color-danger-soft: rgb(244 63 94 / 0.12);
+
+  --color-material-temperado: #f97316;
+  --color-material-sem-temperado: #3b82f6;
+  --color-material-inox: #22c55e;
+
+  --radius-card: 16px;
+  --radius-button: 12px;
+  --radius-input: 12px;
+
+  --shadow-card: 0 4px 24px rgb(0 0 0 / 0.18);
+  --shadow-soft: 0 2px 8px rgb(0 0 0 / 0.12);
+
+  --animate-fade-in: fade-in 200ms ease-out;
+  --animate-slide-up: slide-up 220ms ease-out;
+  --animate-scan-line: scan-line 2s ease-in-out infinite;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scan-line {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translateY(80px);
+    opacity: 1;
+  }
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    border-color: var(--color-border);
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    font-family: var(--font-sans);
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  #root {
+    min-height: 100dvh;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-primary-soft);
+    outline-offset: 2px;
+  }
+
+  input,
+  button,
+  textarea,
+  select {
+    font: inherit;
+  }
+}
+
+@layer utilities {
+  .gradient-line {
+    background: linear-gradient(90deg, #6366f1, #8b5cf6, #f43f5e);
+  }
+
+  .gradient-text {
+    background: linear-gradient(90deg, #6366f1, #8b5cf6, #f43f5e);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
