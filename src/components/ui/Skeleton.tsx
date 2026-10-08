@@ -36,3 +36,22 @@ export function DashboardSkeleton() {
     </div>
   )
 }
+
+export function ListaItensSkeleton({ quantidade = 5 }: { quantidade?: number }) {
+  return (
+    <div className="flex flex-col gap-3 animate-fade-in" aria-hidden>
+      {Array.from({ length: quantidade }, (_, indice) => (
+        <Skeleton key={indice} className="h-[8.5rem] w-full rounded-[var(--radius-card)]" />
+      ))}
+    </div>
+  )
+}
+
+export function ProdutoSkeleton() {
+  return (
+    <div className="flex flex-col gap-4 animate-fade-in" aria-hidden>
+      <Skeleton className="h-5 w-24" />
+      <Skeleton className="h-[26rem] w-full rounded-[var(--radius-card)]" />
+    </div>
+  )
+}
