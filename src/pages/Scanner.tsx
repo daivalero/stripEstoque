@@ -17,6 +17,7 @@ export function Scanner() {
   const [erro, setErro] = useState<string | null>(null)
   const [opcoes, setOpcoes] = useState<EstoqueItem[]>([])
   const [codigoLido, setCodigoLido] = useState('')
+  const [tentativa, setTentativa] = useState(0)
   const arquivoRef = useRef<HTMLInputElement>(null)
 
   async function procurar(valor: string) {
@@ -57,6 +58,7 @@ export function Scanner() {
     setOpcoes([])
     setCodigo('')
     setCodigoLido('')
+    setTentativa((n) => n + 1)
     setCameraAtiva(true)
   }
 
@@ -86,11 +88,12 @@ export function Scanner() {
         <h2 className="text-[1.65rem] font-extrabold tracking-tight text-text">
           Escanear material
         </h2>
-        <p className="mt-1 text-[15px] text-text-secondary">Encha o quadro com a barra</p>
+        <p className="mt-1 text-[15px] text-text-secondary">Aponte para a barra da etiqueta</p>
       </div>
 
       {cameraAtiva && (
         <BarcodeScanner
+          key={tentativa}
           ativo={cameraAtiva}
           onDetect={(lido) => void procurar(lido)}
           onErro={setErro}
@@ -120,6 +123,9 @@ export function Scanner() {
           {opcoes.map((item) => (
             <ItemCard key={item.id} item={item} />
           ))}
+          <Button variant="secondary" size="lg" fullWidth onClick={tentarDeNovo}>
+            Escanear outro
+          </Button>
         </div>
       )}
 

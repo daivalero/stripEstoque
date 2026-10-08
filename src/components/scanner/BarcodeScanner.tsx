@@ -31,7 +31,28 @@ interface Leitura {
   etiqueta: string | null
 }
 
-function criarDicas() {
+type Decodificador = (imagem: ImageData, reforcar: boolean) => Promise<string | null>
+
+interface Passo {
+  regiao: 'visivel' | 'faixa'
+  angulo: number
+  reforcar?: boolean
+}
+
+/** Ordem em que cada quadro da câmera é analisado. Cobre barra torta até ~30 graus. */
+const PASSOS: Passo[] = [
+  { regiao: 'visivel', angulo: 0 },
+  { regiao: 'faixa', angulo: 0 },
+  { regiao: 'visivel', angulo: 12 },
+  { regiao: 'visivel', angulo: -12 },
+  { regiao: 'faixa', angulo: 0, reforcar: true },
+  { regiao: 'visivel', angulo: 24 },
+  { regiao: 'visivel', angulo: -24 },
+]
+
+const LADO_MAXIMO = 1280
+
+function criarDicasJs() {
   const dicas = new Map()
   dicas.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128])
   dicas.set(DecodeHintType.TRY_HARDER, true)
@@ -81,8 +102,86 @@ function limitar(recorte: Recorte, largura: number, altura: number): Recorte | n
   return { x, y, w, h }
 }
 
+/** Aumenta o contraste da imagem inteira para barras desbotadas ou com reflexo. */
+function realcarContraste(imagem: ImageData) {
+  const dados = imagem.data
+  let menor = 255
+  let maior = 0
+  for (let i = 0; i < dados.length; i += 4) {
+    const valor = (dados[i] * 299 + dados[i + 1] * 587 + dados[i + 2] * 114) / 1000
+    if (valor < menor) menor = valor
+    if (valor > maior) maior = valor
+  }
+  if (maior - menor < 20) return
+  const fator = 255 / (maior - menor)
+  for (let i = 0; i < dados.length; i += 4) {
+    const valor = (dados[i] * 299 + dados[i + 1] * 587 + dados[i + 2] * 114) / 1000
+    const novo = (valor - menor) * fator
+    dados[i] = novo
+    dados[i + 1] = novo
+    dados[i + 2] = novo
+  }
+}
+
+function decodificadorJs(): Decodificador {
+  const leitor = new Code128Reader()
+  const dicas = criarDicasJs()
+  return async (imagem, reforcar) => {
+    if (reforcar) realcarContraste(imagem)
+    const { data, width, height } = imagem
+    const cinza = new Uint8ClampedArray(width * height)
+    for (let i = 0, j = 0; i < data.length; i += 4, j += 1) {
+      cinza[j] = (data[i] * 299 + data[i + 1] * 587 + data[i + 2] * 114) / 1000
+    }
+    try {
+      const fonte = new RGBLuminanceSource(cinza, width, height)
+      const bitmap = new BinaryBitmap(new HybridBinarizer(fonte))
+      return leitor.decode(bitmap, dicas).getText()
+    } catch {
+      return null
+    }
+  }
+}
+
+async function decodificadorWasm(): Promise<Decodificador> {
+  const [modulo, arquivo] = await Promise.all([
+    import('zxing-wasm/reader'),
+    import('zxing-wasm/reader/zxing_reader.wasm?url'),
+  ])
+  const enderecoWasm = arquivo.default
+  await modulo.prepareZXingModule({
+    overrides: {
+      locateFile: (caminho: string, prefixo: string) =>
+        caminho.endsWith('.wasm') ? enderecoWasm : prefixo + caminho,
+    },
+    fireImmediately: true,
+  })
+
+  return async (imagem, reforcar) => {
+    if (reforcar) realcarContraste(imagem)
+    const resultados = await modulo.readBarcodes(imagem, {
+      formats: ['Code128'],
+      tryHarder: true,
+      tryRotate: true,
+      tryInvert: false,
+      tryDownscale: true,
+      maxNumberOfSymbols: 1,
+    })
+    return resultados[0]?.text ?? null
+  }
+}
+
+let decodificadorCarregado: Promise<Decodificador> | null = null
+
+function carregarDecodificador(): Promise<Decodificador> {
+  if (!decodificadorCarregado) {
+    decodificadorCarregado = decodificadorWasm().catch(() => decodificadorJs())
+  }
+  return decodificadorCarregado
+}
+
 export async function lerCodigoDeArquivo(arquivo: File): Promise<string> {
-  const leitor = new BrowserMultiFormatReader(criarDicas())
+  const leitor = new BrowserMultiFormatReader(criarDicasJs())
   const url = URL.createObjectURL(arquivo)
   try {
     const resultado = await leitor.decodeFromImageUrl(url)
@@ -117,113 +216,99 @@ export function BarcodeScanner({ ativo, onDetect, onErro }: BarcodeScannerProps)
 
     let parado = false
     let ocupado = false
+    let iniciado = false
+    let reiniciando = false
     let timer = 0
     let passo = 0
     let quadros = 0
+    let falhasVigia = 0
     let stream: MediaStream | undefined
+    let decodificar: Decodificador | null = null
     let ultimoRejeitado = ''
     let repeticoes = 0
-    const leitor = new Code128Reader()
-    const dicas = criarDicas()
     const nativo = criarLeitorNativo()
     const canvas = document.createElement('canvas')
     const contexto = canvas.getContext('2d', { willReadFrequently: true })
 
+    void carregarDecodificador().then((funcao) => {
+      decodificar = funcao
+    })
+
     function pararCamera() {
       window.clearTimeout(timer)
-      stream?.getTracks().forEach((faixa) => faixa.stop())
+      const atual = stream
       stream = undefined
-      faixaRef.current = null
-      elemento.srcObject = null
+      atual?.getTracks().forEach((faixa) => faixa.stop())
+      if (atual && elemento.srcObject === atual) elemento.srcObject = null
+      if (atual && faixaRef.current && atual.getTracks().includes(faixaRef.current)) {
+        faixaRef.current = null
+      }
     }
 
-    function recorteDoQuadro(): Recorte | null {
-      const quadro = quadroRef.current
+    function regiaoVisivel(): Recorte | null {
       const largura = elemento.videoWidth
       const altura = elemento.videoHeight
-      if (!quadro || largura === 0 || altura === 0) return null
+      if (largura === 0 || altura === 0) return null
 
-      const videoBox = elemento.getBoundingClientRect()
-      const quadroBox = quadro.getBoundingClientRect()
-      if (videoBox.width === 0 || quadroBox.width === 0) return null
+      const caixa = elemento.getBoundingClientRect()
+      if (caixa.width === 0 || caixa.height === 0) return null
 
-      const escala = Math.max(videoBox.width / largura, videoBox.height / altura)
-      const deslocamentoX = (videoBox.width - largura * escala) / 2
-      const deslocamentoY = (videoBox.height - altura * escala) / 2
-      const folgaX = quadroBox.width * 0.08
-      const folgaY = quadroBox.height * 0.6
-
+      const escala = Math.max(caixa.width / largura, caixa.height / altura)
+      const visivelW = caixa.width / escala
+      const visivelH = caixa.height / escala
       return limitar(
-        {
-          x: (quadroBox.left - folgaX - videoBox.left - deslocamentoX) / escala,
-          y: (quadroBox.top - folgaY - videoBox.top - deslocamentoY) / escala,
-          w: (quadroBox.width + folgaX * 2) / escala,
-          h: (quadroBox.height + folgaY * 2) / escala,
-        },
+        { x: (largura - visivelW) / 2, y: (altura - visivelH) / 2, w: visivelW, h: visivelH },
         largura,
         altura,
       )
     }
 
-    function faixaLarga(base: Recorte): Recorte | null {
-      const largura = elemento.videoWidth
-      const altura = elemento.videoHeight
-      const centro = base.y + base.h / 2
-      const h = Math.min(altura, base.h * 2.4)
-      return limitar({ x: 0, y: centro - h / 2, w: largura, h }, largura, altura)
+    function faixaDoQuadro(visivel: Recorte): Recorte | null {
+      const quadro = quadroRef.current
+      const caixa = elemento.getBoundingClientRect()
+      if (!quadro || caixa.width === 0) return null
+      const quadroBox = quadro.getBoundingClientRect()
+      const escala = visivel.w / caixa.width
+
+      const folgaY = quadroBox.height * 0.8
+      return limitar(
+        {
+          x: visivel.x,
+          y: visivel.y + (quadroBox.top - folgaY - caixa.top) * escala,
+          w: visivel.w,
+          h: (quadroBox.height + folgaY * 2) * escala,
+        },
+        elemento.videoWidth,
+        elemento.videoHeight,
+      )
     }
 
-    function desenhar(recorte: Recorte) {
-      if (!contexto) return
-      const alvo = 1280
-      const escala = recorte.w > alvo ? alvo / recorte.w : recorte.w < 900 ? 900 / recorte.w : 1
-      canvas.width = Math.max(1, Math.floor(recorte.w * escala))
-      canvas.height = Math.max(1, Math.floor(recorte.h * escala))
-      contexto.imageSmoothingEnabled = true
-      contexto.imageSmoothingQuality = 'high'
+    function desenhar(recorte: Recorte, angulo: number): ImageData | null {
+      if (!contexto) return null
+      const escala = Math.min(1, LADO_MAXIMO / Math.max(recorte.w, recorte.h))
+      const largura = Math.max(1, Math.floor(recorte.w * escala))
+      const altura = Math.max(1, Math.floor(recorte.h * escala))
+      canvas.width = largura
+      canvas.height = altura
+
+      contexto.setTransform(1, 0, 0, 1, 0, 0)
+      contexto.fillStyle = '#808080'
+      contexto.fillRect(0, 0, largura, altura)
+      contexto.translate(largura / 2, altura / 2)
+      contexto.rotate((angulo * Math.PI) / 180)
       contexto.drawImage(
         elemento,
         recorte.x,
         recorte.y,
         recorte.w,
         recorte.h,
-        0,
-        0,
-        canvas.width,
-        canvas.height,
+        -largura / 2,
+        -altura / 2,
+        largura,
+        altura,
       )
-    }
-
-    function decodificar(reforcar: boolean): string | null {
-      if (!contexto) return null
-      const largura = canvas.width
-      const altura = canvas.height
-      const pixels = contexto.getImageData(0, 0, largura, altura).data
-      const cinza = new Uint8ClampedArray(largura * altura)
-
-      let menor = 255
-      let maior = 0
-      for (let i = 0, j = 0; i < pixels.length; i += 4, j += 1) {
-        const valor = (pixels[i] * 299 + pixels[i + 1] * 587 + pixels[i + 2] * 114) / 1000
-        cinza[j] = valor
-        if (valor < menor) menor = valor
-        if (valor > maior) maior = valor
-      }
-
-      if (reforcar && maior - menor > 20) {
-        const fator = 255 / (maior - menor)
-        for (let j = 0; j < cinza.length; j += 1) {
-          cinza[j] = (cinza[j] - menor) * fator
-        }
-      }
-
-      try {
-        const fonte = new RGBLuminanceSource(cinza, largura, altura)
-        const bitmap = new BinaryBitmap(new HybridBinarizer(fonte))
-        return leitor.decode(bitmap, dicas).getText()
-      } catch {
-        return null
-      }
+      contexto.setTransform(1, 0, 0, 1, 0, 0)
+      return contexto.getImageData(0, 0, largura, altura)
     }
 
     async function lerVideoNativo(): Promise<string | null> {
@@ -271,99 +356,143 @@ export function BarcodeScanner({ ativo, onDetect, onErro }: BarcodeScannerProps)
 
     async function lerQuadro() {
       if (parado || ocupado || !contexto) return
-      const base = recorteDoQuadro()
-      if (!base) {
-        timer = window.setTimeout(() => void lerQuadro(), 80)
+      const visivel = regiaoVisivel()
+      if (!visivel || !decodificar) {
+        timer = window.setTimeout(() => void lerQuadro(), 60)
         return
       }
 
       ocupado = true
       try {
-        passo += 1
         quadros += 1
         const leituraVideo = lerVideoNativo()
 
-        const etapa = passo % 3
-        const regiao = etapa === 1 ? (faixaLarga(base) ?? base) : base
-        desenhar(regiao)
-        const lido = decodificar(etapa === 2)
+        const etapa = PASSOS[passo % PASSOS.length]
+        passo += 1
+        const regiao = etapa.regiao === 'faixa' ? (faixaDoQuadro(visivel) ?? visivel) : visivel
+        const imagem = desenhar(regiao, etapa.angulo)
+        const lido = imagem ? await decodificar(imagem, Boolean(etapa.reforcar)) : null
+        if (parado) return
         if (tratar(lido)) return
 
         const doVideo = await leituraVideo
         if (tratar(doVideo)) return
 
-        if (quadros % 8 === 0 && !lido) {
-          setStatus('Procurando a barra... chegue mais perto e deixe reta')
+        if (quadros % 12 === 0 && !lido) {
+          setStatus('Procurando a barra... chegue um pouco mais perto')
         }
       } catch {
-        setStatus('Erro ao ler o quadro. Tente de novo')
+        setStatus('Erro ao ler o quadro. Tentando de novo')
       } finally {
         ocupado = false
-        if (!parado) timer = window.setTimeout(() => void lerQuadro(), 20)
+        if (!parado) timer = window.setTimeout(() => void lerQuadro(), 0)
       }
     }
 
-    async function iniciar() {
+    async function abrirCamera() {
+      pararCamera()
+      const novo = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+      })
+      if (parado) {
+        novo.getTracks().forEach((faixa) => faixa.stop())
+        return
+      }
+
+      stream = novo
+      elemento.srcObject = novo
+      elemento.muted = true
+      elemento.setAttribute('playsinline', 'true')
+      await elemento.play()
+
+      const faixa = novo.getVideoTracks()[0]
+      faixaRef.current = faixa ?? null
+      const recursos = faixa?.getCapabilities?.() as
+        | { focusMode?: string[]; exposureMode?: string[]; torch?: boolean }
+        | undefined
+      const ajustes: MediaTrackConstraintSet[] = []
+      if (recursos?.focusMode?.includes('continuous')) {
+        ajustes.push({ focusMode: 'continuous' } as MediaTrackConstraintSet)
+      }
+      if (recursos?.exposureMode?.includes('continuous')) {
+        ajustes.push({ exposureMode: 'continuous' } as MediaTrackConstraintSet)
+      }
+      if (faixa && ajustes.length > 0) {
+        try {
+          await faixa.applyConstraints({ advanced: ajustes })
+        } catch {
+          // Alguns aparelhos recusam o ajuste. A leitura segue sem ele.
+        }
+      }
+      setTemLanterna(Boolean(recursos?.torch))
+    }
+
+    async function iniciar(tentativa = 0): Promise<void> {
       if (!navigator.mediaDevices?.getUserMedia) {
         onErroRef.current('Este navegador não libera a câmera. Use o Safari no iPhone ou digite o código.')
         return
       }
 
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-          },
-        })
-        if (parado) {
-          pararCamera()
-          return
-        }
-
-        elemento.srcObject = stream
-        elemento.muted = true
-        elemento.setAttribute('playsinline', 'true')
-        await elemento.play()
-
-        const faixa = stream.getVideoTracks()[0]
-        faixaRef.current = faixa ?? null
-        const recursos = faixa?.getCapabilities?.() as
-          | { focusMode?: string[]; exposureMode?: string[]; torch?: boolean }
-          | undefined
-        const ajustes: MediaTrackConstraintSet[] = []
-        if (recursos?.focusMode?.includes('continuous')) {
-          ajustes.push({ focusMode: 'continuous' } as MediaTrackConstraintSet)
-        }
-        if (recursos?.exposureMode?.includes('continuous')) {
-          ajustes.push({ exposureMode: 'continuous' } as MediaTrackConstraintSet)
-        }
-        if (faixa && ajustes.length > 0) {
-          try {
-            await faixa.applyConstraints({ advanced: ajustes })
-          } catch {
-            // Alguns aparelhos recusam o ajuste. A leitura segue sem ele.
-          }
-        }
-        if (recursos?.torch) setTemLanterna(true)
-
-        if (!parado) {
-          setStatus('Encha o quadro com a barra')
-          void lerQuadro()
-        }
+        await abrirCamera()
+        if (parado) return
+        iniciado = true
+        setStatus('Aponte para a barra')
+        window.clearTimeout(timer)
+        void lerQuadro()
       } catch {
-        if (!parado) {
-          onErroRef.current('Não foi possível abrir a câmera. Libere o acesso ou digite o código.')
+        if (parado) return
+        if (tentativa < 3) {
+          setStatus('Reabrindo a câmera...')
+          await new Promise((resolver) => window.setTimeout(resolver, 600))
+          return iniciar(tentativa + 1)
         }
+        onErroRef.current('Não foi possível abrir a câmera. Libere o acesso ou digite o código.')
       }
     }
+
+    async function reiniciarCamera() {
+      if (parado || reiniciando) return
+      reiniciando = true
+      setStatus('Reabrindo a câmera...')
+      pararCamera()
+      try {
+        await iniciar()
+      } finally {
+        reiniciando = false
+        falhasVigia = 0
+      }
+    }
+
+    // Se a câmera congelar ou for tomada por outra tela, abre de novo sozinha.
+    const vigia = window.setInterval(() => {
+      if (parado || !iniciado || reiniciando) return
+      const faixa = stream?.getVideoTracks()[0]
+      const morta = !faixa || faixa.readyState === 'ended'
+      const congelada = elemento.videoWidth === 0 || elemento.readyState < 2 || elemento.paused
+      if (morta || congelada) falhasVigia += 1
+      else falhasVigia = 0
+      if (falhasVigia >= 2) void reiniciarCamera()
+    }, 1500)
+
+    function aoVoltarParaAba() {
+      if (document.visibilityState !== 'visible' || parado || !iniciado) return
+      const faixa = stream?.getVideoTracks()[0]
+      if (!faixa || faixa.readyState === 'ended') void reiniciarCamera()
+    }
+    document.addEventListener('visibilitychange', aoVoltarParaAba)
 
     void iniciar()
 
     return () => {
       parado = true
+      window.clearInterval(vigia)
+      document.removeEventListener('visibilitychange', aoVoltarParaAba)
       pararCamera()
       ultimoCodigo.current = ''
       setTemLanterna(false)
@@ -397,9 +526,9 @@ export function BarcodeScanner({ ativo, onDetect, onErro }: BarcodeScannerProps)
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div
           ref={quadroRef}
-          className="relative h-36 w-[96%] rounded-xl border-[3px] border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
+          className="relative h-36 w-[96%] rounded-xl border-[3px] border-white/90"
         >
-          <div className="absolute inset-x-3 top-1/2 h-0.5 -translate-y-1/2 bg-white" />
+          <div className="absolute inset-x-3 top-1/2 h-0.5 -translate-y-1/2 bg-white/80" />
         </div>
       </div>
       {temLanterna && (

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeft, ScanLine } from 'lucide-react'
 import { Conferencia } from '@/components/estoque/Conferencia'
 import { MaterialBadge } from '@/components/estoque/MaterialBadge'
 import { Button } from '@/components/ui/Button'
@@ -21,6 +21,7 @@ function Campo({ rotulo, valor }: { rotulo: string; valor: string }) {
 
 export function Produto() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const [item, setItem] = useState<EstoqueItem | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
@@ -105,6 +106,18 @@ export function Produto() {
       )}
 
       {item && conferindo && <Conferencia item={item} />}
+
+      {item && (
+        <Button
+          variant="secondary"
+          size="lg"
+          fullWidth
+          onClick={() => navigate('/scanner', { replace: true })}
+        >
+          <ScanLine className="size-5" aria-hidden />
+          Escanear outro
+        </Button>
+      )}
     </div>
   )
 }
