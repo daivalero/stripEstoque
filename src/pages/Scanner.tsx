@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { buscarPorCodigo } from '@/services/estoque'
+import { loteDaEtiqueta } from '@/utils/estoque'
 import type { EstoqueItem } from '@/types'
 
 export function Scanner() {
@@ -22,7 +23,8 @@ export function Scanner() {
     const termo = valor.trim()
     if (!termo) return
 
-    setCodigoLido(termo)
+    const lote = loteDaEtiqueta(termo)
+    setCodigoLido(lote ?? termo)
     setBuscando(true)
     setErro(null)
     setOpcoes([])
@@ -35,7 +37,11 @@ export function Scanner() {
         return
       }
       if (itens.length === 0) {
-        setErro(`Código ${termo} não encontrado no estoque importado.`)
+        setErro(
+          lote
+            ? `Lote ${lote} não encontrado no estoque importado.`
+            : `Código ${termo} não encontrado no estoque importado.`,
+        )
         return
       }
       setOpcoes(itens)
@@ -80,7 +86,7 @@ export function Scanner() {
         <h2 className="text-[1.65rem] font-extrabold tracking-tight text-text">
           Escanear material
         </h2>
-        <p className="mt-1 text-[15px] text-text-secondary">Aponte para o código</p>
+        <p className="mt-1 text-[15px] text-text-secondary">Encaixe a barra no quadro</p>
       </div>
 
       {cameraAtiva && (
@@ -129,7 +135,7 @@ export function Scanner() {
           name="codigo"
           value={codigo}
           onChange={(event) => setCodigo(event.target.value)}
-          placeholder="Item ou lote"
+          placeholder="Item, lote ou 017;lote;peso"
           autoComplete="off"
         />
         <Button type="submit" size="lg" fullWidth loading={buscando}>

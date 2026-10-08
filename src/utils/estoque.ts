@@ -39,6 +39,34 @@ export function normalizarTexto(value: unknown): string | null {
   return texto
 }
 
+export function termosDeBusca(codigo: string): string[] {
+  const termo = codigo.trim()
+  const termos = new Set<string>()
+  if (!termo) return []
+  termos.add(termo)
+
+  for (const parte of termo.split(/[;|]/)) {
+    const texto = parte.trim()
+    if (/^\d+\/\d+$/.test(texto)) termos.add(texto)
+  }
+
+  const pedacos = termo.split('/').map((parte) => parte.trim())
+  if (
+    pedacos.length === 3 &&
+    /^\d{2,4}$/.test(pedacos[0]) &&
+    /^\d+$/.test(pedacos[1]) &&
+    /^\d+$/.test(pedacos[2])
+  ) {
+    termos.add(`${pedacos[1]}/${pedacos[2]}`)
+  }
+
+  return [...termos]
+}
+
+export function loteDaEtiqueta(codigo: string): string | null {
+  return termosDeBusca(codigo).find((termo) => /^\d+\/\d+$/.test(termo)) ?? null
+}
+
 export function normalizarLocalizacao(value: unknown): string | null {
   const texto = normalizarTexto(value)
   if (!texto) return null

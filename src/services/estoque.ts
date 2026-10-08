@@ -1,4 +1,5 @@
 import { supabase } from '@/services/supabase'
+import { termosDeBusca } from '@/utils/estoque'
 import type { EstoqueImportacao, EstoqueItem, EstoqueItemInput, MaterialTipo } from '@/types'
 
 const PAGINA = 40
@@ -132,18 +133,30 @@ export async function buscarPorCodigo(codigo: string): Promise<EstoqueItem[]> {
   const importacao = await buscarImportacaoAtiva()
   if (!importacao) return []
 
-  const termo = codigo.trim()
-  if (!termo) return []
+  const termos = termosDeBusca(codigo)
+  if (termos.length === 0) return []
 
-  const { data, error } = await supabase
-    .from('estoque_itens')
-    .select('*')
-    .eq('importacao_id', importacao.id)
-    .or(`item.eq.${termo},lote.eq.${termo}`)
-    .limit(20)
+  const consulta = (coluna: 'item' | 'lote') =>
+    supabase
+      .from('estoque_itens')
+      .select('*')
+      .eq('importacao_id', importacao.id)
+      .in(coluna, termos)
+      .limit(20)
 
-  if (error) throw new Error(mensagemErro(error))
-  return (data ?? []) as EstoqueItem[]
+  const [porItem, porLote] = await Promise.all([consulta('item'), consulta('lote')])
+  if (porItem.error) throw new Error(mensagemErro(porItem.error))
+  if (porLote.error) throw new Error(mensagemErro(porLote.error))
+
+  const vistos = new Set<string>()
+  const itens: EstoqueItem[] = []
+  for (const linha of [...(porLote.data ?? []), ...(porItem.data ?? [])]) {
+    const item = linha as EstoqueItem
+    if (vistos.has(item.id)) continue
+    vistos.add(item.id)
+    itens.push(item)
+  }
+  return itens
 }
 
 export async function buscarItem(id: string): Promise<EstoqueItem | null> {
