@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { BrowserMultiFormatReader } from '@zxing/browser'
-import { BarcodeFormat, DecodeHintType } from '@zxing/library'
+import {
+  BarcodeFormat,
+  BinaryBitmap,
+  Code128Reader,
+  DecodeHintType,
+  HybridBinarizer,
+  RGBLuminanceSource,
+} from '@zxing/library'
 
 interface BarcodeScannerProps {
   ativo: boolean
@@ -19,10 +26,16 @@ interface LeitorNativo {
   detect: (origem: CanvasImageSource) => Promise<Array<{ rawValue?: string }>>
 }
 
-function criarLeitor() {
+interface Leitura {
+  texto: string
+  etiqueta: string | null
+}
+
+function criarDicas() {
   const dicas = new Map()
   dicas.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128])
-  return new BrowserMultiFormatReader(dicas)
+  dicas.set(DecodeHintType.TRY_HARDER, true)
+  return dicas
 }
 
 function criarLeitorNativo(): LeitorNativo | null {
@@ -51,12 +64,10 @@ function codigoDeEtiqueta(codigo: string): string | null {
   return null
 }
 
-function escolherCodigo(codigos: string[]): string | null {
-  for (const codigo of codigos) {
-    const etiqueta = codigoDeEtiqueta(codigo)
-    if (etiqueta) return etiqueta
-  }
-  return null
+function interpretar(texto: string): Leitura | null {
+  const limpo = texto.trim()
+  if (!limpo) return null
+  return { texto: limpo, etiqueta: codigoDeEtiqueta(limpo) }
 }
 
 function limitar(recorte: Recorte, largura: number, altura: number): Recorte | null {
@@ -71,15 +82,12 @@ function limitar(recorte: Recorte, largura: number, altura: number): Recorte | n
 }
 
 export async function lerCodigoDeArquivo(arquivo: File): Promise<string> {
-  const leitor = criarLeitor()
+  const leitor = new BrowserMultiFormatReader(criarDicas())
   const url = URL.createObjectURL(arquivo)
   try {
     const resultado = await leitor.decodeFromImageUrl(url)
-    const etiqueta = codigoDeEtiqueta(resultado.getText())
-    if (!etiqueta) {
-      throw new Error('A foto não mostrou o código da etiqueta. Aproxime só a barra.')
-    }
-    return etiqueta
+    const texto = resultado.getText().trim()
+    return codigoDeEtiqueta(texto) ?? texto
   } finally {
     URL.revokeObjectURL(url)
   }
@@ -110,8 +118,13 @@ export function BarcodeScanner({ ativo, onDetect, onErro }: BarcodeScannerProps)
     let parado = false
     let ocupado = false
     let timer = 0
+    let passo = 0
+    let quadros = 0
     let stream: MediaStream | undefined
-    const leitor = criarLeitor()
+    let ultimoRejeitado = ''
+    let repeticoes = 0
+    const leitor = new Code128Reader()
+    const dicas = criarDicas()
     const nativo = criarLeitorNativo()
     const canvas = document.createElement('canvas')
     const contexto = canvas.getContext('2d', { willReadFrequently: true })
@@ -138,7 +151,7 @@ export function BarcodeScanner({ ativo, onDetect, onErro }: BarcodeScannerProps)
       const deslocamentoX = (videoBox.width - largura * escala) / 2
       const deslocamentoY = (videoBox.height - altura * escala) / 2
       const folgaX = quadroBox.width * 0.08
-      const folgaY = quadroBox.height * 0.35
+      const folgaY = quadroBox.height * 0.6
 
       return limitar(
         {
@@ -152,13 +165,22 @@ export function BarcodeScanner({ ativo, onDetect, onErro }: BarcodeScannerProps)
       )
     }
 
+    function faixaLarga(base: Recorte): Recorte | null {
+      const largura = elemento.videoWidth
+      const altura = elemento.videoHeight
+      const centro = base.y + base.h / 2
+      const h = Math.min(altura, base.h * 2.4)
+      return limitar({ x: 0, y: centro - h / 2, w: largura, h }, largura, altura)
+    }
+
     function desenhar(recorte: Recorte) {
       if (!contexto) return
-      const alvo = 1700
-      const escala = recorte.w < alvo ? alvo / recorte.w : 1
+      const alvo = 1280
+      const escala = recorte.w > alvo ? alvo / recorte.w : recorte.w < 900 ? 900 / recorte.w : 1
       canvas.width = Math.max(1, Math.floor(recorte.w * escala))
       canvas.height = Math.max(1, Math.floor(recorte.h * escala))
-      contexto.imageSmoothingEnabled = false
+      contexto.imageSmoothingEnabled = true
+      contexto.imageSmoothingQuality = 'high'
       contexto.drawImage(
         elemento,
         recorte.x,
@@ -172,23 +194,33 @@ export function BarcodeScanner({ ativo, onDetect, onErro }: BarcodeScannerProps)
       )
     }
 
-    function realcar() {
-      if (!contexto || canvas.width === 0) return
-      const imagem = contexto.getImageData(0, 0, canvas.width, canvas.height)
-      const dados = imagem.data
-      for (let i = 0; i < dados.length; i += 4) {
-        const cinza = dados[i] * 0.299 + dados[i + 1] * 0.587 + dados[i + 2] * 0.114
-        const forte = Math.max(0, Math.min(255, (cinza - 60) * 2.1))
-        dados[i] = forte
-        dados[i + 1] = forte
-        dados[i + 2] = forte
-      }
-      contexto.putImageData(imagem, 0, 0)
-    }
+    function decodificar(reforcar: boolean): string | null {
+      if (!contexto) return null
+      const largura = canvas.width
+      const altura = canvas.height
+      const pixels = contexto.getImageData(0, 0, largura, altura).data
+      const cinza = new Uint8ClampedArray(largura * altura)
 
-    function lerZxing(): string | null {
+      let menor = 255
+      let maior = 0
+      for (let i = 0, j = 0; i < pixels.length; i += 4, j += 1) {
+        const valor = (pixels[i] * 299 + pixels[i + 1] * 587 + pixels[i + 2] * 114) / 1000
+        cinza[j] = valor
+        if (valor < menor) menor = valor
+        if (valor > maior) maior = valor
+      }
+
+      if (reforcar && maior - menor > 20) {
+        const fator = 255 / (maior - menor)
+        for (let j = 0; j < cinza.length; j += 1) {
+          cinza[j] = (cinza[j] - menor) * fator
+        }
+      }
+
       try {
-        return codigoDeEtiqueta(leitor.decodeFromCanvas(canvas).getText())
+        const fonte = new RGBLuminanceSource(cinza, largura, altura)
+        const bitmap = new BinaryBitmap(new HybridBinarizer(fonte))
+        return leitor.decode(bitmap, dicas).getText()
       } catch {
         return null
       }
@@ -198,19 +230,43 @@ export function BarcodeScanner({ ativo, onDetect, onErro }: BarcodeScannerProps)
       if (!nativo) return null
       try {
         const achados = await nativo.detect(elemento)
-        return escolherCodigo(achados.map((item) => item.rawValue ?? ''))
+        return achados.map((item) => item.rawValue ?? '').find(Boolean) ?? null
       } catch {
         return null
       }
     }
 
-    function aceitar(codigo: string) {
+    function entregar(codigo: string) {
       if (!codigo || codigo === ultimoCodigo.current || parado) return
       ultimoCodigo.current = codigo
       parado = true
       pararCamera()
       if (typeof navigator.vibrate === 'function') navigator.vibrate(80)
       onDetectRef.current(codigo)
+    }
+
+    function tratar(texto: string | null): boolean {
+      if (!texto) return false
+      const leitura = interpretar(texto)
+      if (!leitura) return false
+
+      if (leitura.etiqueta) {
+        entregar(leitura.etiqueta)
+        return true
+      }
+
+      if (leitura.texto === ultimoRejeitado) {
+        repeticoes += 1
+      } else {
+        ultimoRejeitado = leitura.texto
+        repeticoes = 1
+      }
+      setStatus(`Li "${leitura.texto}", mas não parece a etiqueta`)
+      if (repeticoes >= 3) {
+        entregar(leitura.texto)
+        return true
+      }
+      return false
     }
 
     async function lerQuadro() {
@@ -223,24 +279,27 @@ export function BarcodeScanner({ ativo, onDetect, onErro }: BarcodeScannerProps)
 
       ocupado = true
       try {
+        passo += 1
+        quadros += 1
         const leituraVideo = lerVideoNativo()
-        desenhar(base)
-        const direto = lerZxing()
-        if (direto) {
-          aceitar(direto)
-          return
-        }
-        realcar()
-        const reforcado = lerZxing()
+
+        const etapa = passo % 3
+        const regiao = etapa === 1 ? (faixaLarga(base) ?? base) : base
+        desenhar(regiao)
+        const lido = decodificar(etapa === 2)
+        if (tratar(lido)) return
+
         const doVideo = await leituraVideo
-        const codigo = reforcado ?? doVideo
-        if (codigo) {
-          aceitar(codigo)
-          return
+        if (tratar(doVideo)) return
+
+        if (quadros % 8 === 0 && !lido) {
+          setStatus('Procurando a barra... chegue mais perto e deixe reta')
         }
+      } catch {
+        setStatus('Erro ao ler o quadro. Tente de novo')
       } finally {
         ocupado = false
-        if (!parado) timer = window.setTimeout(() => void lerQuadro(), 30)
+        if (!parado) timer = window.setTimeout(() => void lerQuadro(), 20)
       }
     }
 
@@ -282,7 +341,11 @@ export function BarcodeScanner({ ativo, onDetect, onErro }: BarcodeScannerProps)
           ajustes.push({ exposureMode: 'continuous' } as MediaTrackConstraintSet)
         }
         if (faixa && ajustes.length > 0) {
-          await faixa.applyConstraints({ advanced: ajustes })
+          try {
+            await faixa.applyConstraints({ advanced: ajustes })
+          } catch {
+            // Alguns aparelhos recusam o ajuste. A leitura segue sem ele.
+          }
         }
         if (recursos?.torch) setTemLanterna(true)
 
