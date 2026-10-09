@@ -196,6 +196,53 @@ export async function contarPorMaterial(
   return Object.fromEntries(contagens) as Record<MaterialTipo, number>
 }
 
+export async function listarImportacoes(): Promise<EstoqueImportacao[]> {
+  const { data, error } = await supabase
+    .from('estoque_importacoes')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(mensagemErro(error))
+  return (data ?? []) as EstoqueImportacao[]
+}
+
+/**
+ * Apaga a cópia temporária do estoque (importações e itens).
+ * O histórico de alterações (estoque_alteracoes) não é tocado.
+ */
+export async function apagarEstoqueTemporario(): Promise<number> {
+  const importacoes = await listarImportacoes()
+  if (importacoes.length === 0) return 0
+  const ids = importacoes.map((importacao) => importacao.id)
+
+  const { error: erroItens } = await supabase
+    .from('estoque_itens')
+    .delete()
+    .in('importacao_id', ids)
+  if (erroItens) throw new Error(mensagemApagar(erroItens))
+
+  const { data: apagadas, error: erroImportacoes } = await supabase
+    .from('estoque_importacoes')
+    .delete()
+    .in('id', ids)
+    .select('id')
+  if (erroImportacoes) throw new Error(mensagemApagar(erroImportacoes))
+
+  // O banco não avisa quando a regra de segurança bloqueia: confere o que foi apagado.
+  if ((apagadas?.length ?? 0) < ids.length) {
+    throw new Error('Seu usuário não tem permissão para apagar o estoque importado.')
+  }
+
+  return ids.length
+}
+
+function mensagemApagar(error: { code?: string; message?: string }): string {
+  if (error.message?.toLowerCase().includes('row-level security')) {
+    return 'Seu usuário não tem permissão para apagar o estoque importado.'
+  }
+  return error.message || 'Não foi possível apagar o estoque importado.'
+}
+
 export async function importarEstoque(params: {
   arquivo: string
   usuarioId: string

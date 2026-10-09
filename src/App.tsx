@@ -9,6 +9,7 @@ import { Dashboard } from '@/pages/Dashboard'
 import { Estoque } from '@/pages/Estoque'
 import { Importar } from '@/pages/Importar'
 import { Inventario } from '@/pages/Inventario'
+import { InventarioLocal } from '@/pages/InventarioLocal'
 import { Login } from '@/pages/Login'
 import { Produto } from '@/pages/Produto'
 import { Scanner } from '@/pages/Scanner'
@@ -35,6 +36,7 @@ export default function App() {
               <Route path="historico" element={<Alteracoes />} />
               <Route path="importar" element={<Importar />} />
               <Route path="inventario" element={<Inventario />} />
+              <Route path="inventario/:local" element={<InventarioLocal />} />
               <Route path="configuracoes" element={<Configuracoes />} />
             </Route>
 

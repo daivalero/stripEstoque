@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react'
+import { ExportarCorrecoes } from '@/components/estoque/ExportarCorrecoes'
 import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { useAuth } from '@/hooks/useAuth'
 import { listarAlteracoes, type AlteracaoComUsuario } from '@/services/alteracoes'
+import { valorLegivel } from '@/utils/camposEstoque'
+import { isAdmin } from '@/utils/estoque'
 
 interface GrupoHistorico {
   chave: string
@@ -65,21 +69,16 @@ function formatarQuando(iso: string): string {
 
 function origemLegivel(origem: string): string {
   if (origem === 'conferencia_fisica') return 'Conferência física'
+  if (origem === 'inventario') return 'Inventário'
   return origem
 }
 
 function valorCampo(campo: string, valor: string | null): string {
-  if (!valor) return '—'
-  if (campo === 'Quantidade') {
-    const numero = Number(valor)
-    if (!Number.isNaN(numero)) {
-      return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 3 }).format(numero)} kg`
-    }
-  }
-  return valor
+  return valorLegivel(campo, valor)
 }
 
 export function Alteracoes() {
+  const { profile } = useAuth()
   const [grupos, setGrupos] = useState<GrupoHistorico[]>([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
@@ -109,6 +108,8 @@ export function Alteracoes() {
         <h2 className="text-[1.65rem] font-extrabold tracking-tight text-text">Histórico</h2>
         <p className="mt-1 text-[15px] text-text-secondary">Conferências e correções registradas</p>
       </div>
+
+      {isAdmin(profile?.role) && <ExportarCorrecoes compacto />}
 
       {carregando && (
         <div className="flex flex-col gap-3">
