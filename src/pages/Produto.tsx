@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, ScanLine } from 'lucide-react'
+import { ArrowLeft, Pencil, ScanLine } from 'lucide-react'
 import { Conferencia } from '@/components/estoque/Conferencia'
+import { FichaItem } from '@/components/estoque/FichaItem'
 import { MaterialBadge } from '@/components/estoque/MaterialBadge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { useToast } from '@/components/ui/Toast'
+import { useAuth } from '@/hooks/useAuth'
+import { salvarEdicao } from '@/services/edicao'
 import { buscarItem } from '@/services/estoque'
 import type { EstoqueItem } from '@/types'
 import { comoMaterial, formatarMedida, formatarQuantidade } from '@/utils/estoque'
@@ -26,6 +30,31 @@ export function Produto() {
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
   const [conferindo, setConferindo] = useState(false)
+  const [editando, setEditando] = useState(false)
+  const [salvando, setSalvando] = useState(false)
+  const { user } = useAuth()
+  const { success, error: toastErro } = useToast()
+
+  async function salvarEdicaoCompleta(novo: EstoqueItem) {
+    if (!item) return
+    setSalvando(true)
+    try {
+      const registradas = await salvarEdicao({
+        userId: user?.id,
+        base: item,
+        novo,
+        origem: 'ajuste_manual',
+        observacao: 'Edição manual do material',
+      })
+      setItem(novo)
+      setEditando(false)
+      if (registradas.length > 0) success('Alterações salvas')
+    } catch (error) {
+      toastErro(error instanceof Error ? error.message : 'Não foi possível salvar.')
+    } finally {
+      setSalvando(false)
+    }
+  }
 
   useEffect(() => {
     let ativo = true
@@ -95,7 +124,20 @@ export function Produto() {
             <Campo rotulo="Quantidade" valor={formatarQuantidade(item.quantidade)} />
             <Campo rotulo="Superfície" valor={item.superficie ?? '—'} />
             <Campo rotulo="Família" valor={item.fam_com ?? '—'} />
+            <Campo rotulo="Depósito" valor={item.dep ?? '—'} />
+            <Campo rotulo="Estabelecimento" valor={item.estab ?? '—'} />
           </div>
+
+          <Button
+            variant="secondary"
+            size="lg"
+            fullWidth
+            className="mt-6"
+            onClick={() => setEditando(true)}
+          >
+            <Pencil className="size-5" aria-hidden />
+            Editar todos os campos
+          </Button>
 
           {!conferindo && (
             <Button size="lg" fullWidth className="mt-6" onClick={() => setConferindo(true)}>
@@ -105,7 +147,19 @@ export function Produto() {
         </Card>
       )}
 
-      {item && conferindo && <Conferencia item={item} />}
+      {item && conferindo && <Conferencia item={item} onSalvo={setItem} />}
+
+      {item && editando && (
+        <FichaItem
+          original={item}
+          base={item}
+          localFisico={item.localizacao ?? ''}
+          textoSemMudanca="Fechar sem alterar"
+          salvando={salvando}
+          onSalvar={(novo) => void salvarEdicaoCompleta(novo)}
+          onCancelar={() => setEditando(false)}
+        />
+      )}
 
       {item && (
         <Button

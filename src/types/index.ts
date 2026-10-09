@@ -18,6 +18,8 @@ export type AlteracaoOrigem =
 export interface EstoqueAlteracao {
   id: string
   user_id: string
+  /** Linha do estoque alterada (ausente em registros antigos). */
+  item_id?: string | null
   item: string
   lote: string | null
   material: string | null

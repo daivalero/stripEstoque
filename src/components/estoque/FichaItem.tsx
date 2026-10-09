@@ -8,6 +8,7 @@ import type { EstoqueItem } from '@/types'
 import {
   CAMPOS,
   OPCOES_MATERIAL,
+  ajustarCodigoDoMaterial,
   aplicarFormulario,
   diferencasEntre,
   formularioDe,
@@ -26,6 +27,8 @@ interface FichaItemProps {
   base: EstoqueItem
   /** Localização onde o item está sendo conferido agora. */
   localFisico: string
+  /** Texto do botão quando nada foi alterado. */
+  textoSemMudanca?: string
   /** O item foi marcado como não encontrado antes. */
   estavaAusente?: boolean
   salvando: boolean
@@ -37,6 +40,7 @@ export function FichaItem({
   original,
   base,
   localFisico,
+  textoSemMudanca = 'Está tudo certo — conferido',
   estavaAusente = false,
   salvando,
   onSalvar,
@@ -62,7 +66,16 @@ export function FichaItem({
 
   function alterar(chave: ChaveCampo, valor: string) {
     setErro(null)
-    setFormulario((atual) => ({ ...atual, [chave]: valor }))
+    setFormulario((atual) => {
+      const proximo = { ...atual, [chave]: valor }
+      // Trocar o material troca também o código ACT/AST na descrição e na família.
+      if (chave === 'material') {
+        const material = comoMaterial(valor)
+        proximo.descricao = ajustarCodigoDoMaterial(atual.descricao, material)
+        proximo.fam_com = ajustarCodigoDoMaterial(atual.fam_com, material)
+      }
+      return proximo
+    })
   }
 
   function salvar() {
@@ -95,8 +108,8 @@ export function FichaItem({
             <div className="mt-4 flex gap-2 rounded-2xl border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-warning">
               <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
               <span>
-                No ERP este item está em{' '}
-                <strong>{nomeLocalErp ?? 'sem localização'}</strong>. Será registrado como{' '}
+                Antes este item estava em{' '}
+                <strong>{nomeLocalErp ?? 'sem localização'}</strong>. Será registrado em{' '}
                 <strong>{valorPadrao(novoItem, 'localizacao') ?? 'sem localização'}</strong>.
               </span>
             </div>
@@ -107,7 +120,7 @@ export function FichaItem({
               const digitado = padronizarDigitado(campo.chave, formulario[campo.chave])
               const noErp = valorPadrao(original, campo.chave)
               const diferente = digitado !== noErp
-              const dica = diferente ? `No ERP: ${valorLegivel(campo.rotulo, noErp)}` : undefined
+              const dica = diferente ? `Antes: ${valorLegivel(campo.rotulo, noErp)}` : undefined
 
               if (campo.tipo === 'material') {
                 return (
@@ -162,7 +175,7 @@ export function FichaItem({
             <Button size="lg" fullWidth loading={salvando} onClick={salvar}>
               {mudancas.length > 0
                 ? `Salvar alterações (${mudancas.length})`
-                : 'Está tudo certo — conferido'}
+                : textoSemMudanca}
             </Button>
             <Button
               size="lg"

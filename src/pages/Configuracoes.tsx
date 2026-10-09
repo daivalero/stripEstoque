@@ -42,7 +42,6 @@ export function Configuracoes() {
   const [confirmando, setConfirmando] = useState(false)
   const [palavra, setPalavra] = useState('')
   const [apagando, setApagando] = useState(false)
-
   const carregar = useCallback(async () => {
     try {
       setImportacoes(await listarImportacoes())

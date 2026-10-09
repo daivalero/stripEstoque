@@ -12,7 +12,8 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/hooks/useAuth'
 import { useInventarioMarcas, type Marca, type Marcas } from '@/hooks/useInventarioMarcas'
-import { registrarAlteracoes, type NovaAlteracao } from '@/services/alteracoes'
+import { registrarAlteracoes } from '@/services/alteracoes'
+import { montarAlteracoes, salvarEdicao } from '@/services/edicao'
 import { buscarImportacaoAtiva, buscarPorCodigo } from '@/services/estoque'
 import { listarItensDaLocalizacao } from '@/services/inventario'
 import type { EstoqueImportacao, EstoqueItem } from '@/types'
@@ -97,24 +98,6 @@ export function InventarioLocal() {
   const resolvidos = itens.filter((item) => marcas[item.id]).length
   const percentual = itens.length === 0 ? 0 : Math.round((resolvidos / itens.length) * 100)
 
-  function alteracoesDe(original: EstoqueItem, diferencas: Diferenca[], observacao: string) {
-    if (!user) throw new Error('Sessão expirada. Entre novamente.')
-    const lista: NovaAlteracao[] = diferencas.map((diferenca) => ({
-      user_id: user.id,
-      item: original.item,
-      lote: original.lote,
-      material: original.material,
-      espessura: original.espessura,
-      largura: original.largura,
-      campo_alterado: diferenca.campo,
-      valor_anterior: diferenca.anterior,
-      valor_novo: diferenca.novo,
-      origem: 'inventario',
-      observacao,
-    }))
-    return lista
-  }
-
   function conferido(item: EstoqueItem) {
     marcar(item.id, { status: 'ok', de: item.localizacao })
   }
@@ -149,11 +132,14 @@ export function InventarioLocal() {
 
     setSalvando(true)
     try {
-      if (diferencas.length > 0) {
-        await registrarAlteracoes(
-          alteracoesDe(original, diferencas, `Inventário ${local}: item conferido e corrigido`),
-        )
-      }
+      await salvarEdicao({
+        userId: user?.id,
+        base,
+        novo,
+        diferencas,
+        origem: 'inventario',
+        observacao: `Inventário ${local}: item conferido e corrigido`,
+      })
 
       const localErp = valorPadrao(original, 'localizacao')
       const movido = localNovo !== localErp
@@ -177,10 +163,13 @@ export function InventarioLocal() {
   async function confirmarAusente(item: EstoqueItem) {
     setSalvando(true)
     try {
+      if (!user) throw new Error('Sessão expirada. Entre novamente.')
       await registrarAlteracoes(
-        alteracoesDe(
+        montarAlteracoes(
+          user.id,
           item,
           [{ chave: 'localizacao', campo: 'Localização', anterior: local, novo: NAO_ENCONTRADO }],
+          'inventario',
           `Inventário ${local}: item não encontrado`,
         ),
       )
@@ -221,9 +210,20 @@ export function InventarioLocal() {
 
     setSalvando(true)
     try {
-      await registrarAlteracoes(
-        alteracoesDe(original, diferencas, `Inventário ${local}: marcação desfeita`),
-      )
+      const observacao = `Inventário ${local}: marcação desfeita`
+      if (marca.status === 'ausente') {
+        if (!user) throw new Error('Sessão expirada. Entre novamente.')
+        await registrarAlteracoes(montarAlteracoes(user.id, original, diferencas, 'inventario', observacao))
+      } else if (marca.item) {
+        await salvarEdicao({
+          userId: user?.id,
+          base: marca.item,
+          novo: original,
+          diferencas,
+          origem: 'inventario',
+          observacao,
+        })
+      }
       desmarcar(item.id)
       success('Marcação desfeita')
     } catch (error) {

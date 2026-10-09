@@ -196,6 +196,40 @@ export async function contarPorMaterial(
   return Object.fromEntries(contagens) as Record<MaterialTipo, number>
 }
 
+const MENSAGEM_MIGRACAO =
+  'O banco ainda não permite editar o estoque. Rode a migração 006_editar_itens.sql no Supabase.'
+
+/** Grava na cópia do estoque os valores corrigidos. O histórico é registrado à parte. */
+export async function atualizarItem(item: EstoqueItem): Promise<void> {
+  const { data, error } = await supabase
+    .from('estoque_itens')
+    .update({
+      descricao: item.descricao,
+      dep: item.dep,
+      fam_com: item.fam_com,
+      item: item.item,
+      espessura: item.espessura,
+      estab: item.estab,
+      largura: item.largura,
+      lote: item.lote,
+      localizacao: item.localizacao,
+      superficie: item.superficie,
+      quantidade: item.quantidade,
+      material: item.material,
+    })
+    .eq('id', item.id)
+    .select('id')
+
+  if (error) {
+    if (error.message?.toLowerCase().includes('permission denied')) {
+      throw new Error(MENSAGEM_MIGRACAO)
+    }
+    throw new Error('Não foi possível salvar o item.')
+  }
+  // Sem a regra de segurança, o banco responde "ok" sem alterar nada.
+  if (!data || data.length === 0) throw new Error(MENSAGEM_MIGRACAO)
+}
+
 export async function listarImportacoes(): Promise<EstoqueImportacao[]> {
   const { data, error } = await supabase
     .from('estoque_importacoes')

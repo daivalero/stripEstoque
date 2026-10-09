@@ -5,15 +5,17 @@ import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/components/ui/Toast'
-import { registrarAlteracoes } from '@/services/alteracoes'
+import { salvarEdicao } from '@/services/edicao'
 import type { EstoqueItem } from '@/types'
 import { formatarQuantidade, normalizarLocalizacao, parseNumero } from '@/utils/estoque'
 
 interface ConferenciaProps {
   item: EstoqueItem
+  /** Chamado com o item atualizado depois de salvar. */
+  onSalvo?: (item: EstoqueItem) => void
 }
 
-export function Conferencia({ item }: ConferenciaProps) {
+export function Conferencia({ item, onSalvo }: ConferenciaProps) {
   const { user } = useAuth()
   const { success, error: toastErro } = useToast()
   const [localFisica, setLocalFisica] = useState(item.localizacao ?? '')
@@ -46,43 +48,23 @@ export function Conferencia({ item }: ConferenciaProps) {
 
   async function confirmar() {
     if (!user) return
-    const alteracoes = []
 
-    if (localMudou) {
-      alteracoes.push({
-        user_id: user.id,
-        item: item.item,
-        lote: item.lote,
-        material: item.material,
-        espessura: item.espessura,
-        largura: item.largura,
-        campo_alterado: 'Localização',
-        valor_anterior: localErp,
-        valor_novo: localInformada,
-        origem: 'conferencia_fisica',
-        observacao: observacao.trim() || null,
-      })
-    }
-
-    if (qtdMudou) {
-      alteracoes.push({
-        user_id: user.id,
-        item: item.item,
-        lote: item.lote,
-        material: item.material,
-        espessura: item.espessura,
-        largura: item.largura,
-        campo_alterado: 'Quantidade',
-        valor_anterior: qtdErp == null ? null : String(qtdErp),
-        valor_novo: qtdInformada == null ? null : String(qtdInformada),
-        origem: 'conferencia_fisica',
-        observacao: observacao.trim() || null,
-      })
+    const novo: EstoqueItem = {
+      ...item,
+      localizacao: localInformada,
+      quantidade: qtdInformada,
     }
 
     setSalvando(true)
     try {
-      await registrarAlteracoes(alteracoes)
+      await salvarEdicao({
+        userId: user.id,
+        base: item,
+        novo,
+        origem: 'conferencia_fisica',
+        observacao: observacao.trim() || null,
+      })
+      onSalvo?.(novo)
       setModalAberto(false)
       setSalvo(true)
       success('Alteração salva')

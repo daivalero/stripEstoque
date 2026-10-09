@@ -126,6 +126,16 @@ export function diferencasEntre(antes: EstoqueItem, depois: EstoqueItem): Difere
   return lista
 }
 
+/**
+ * A descrição e a família trazem o código do material: ACT (temperado) ou AST (sem têmpera).
+ * Ao trocar o material, troca o código junto (ex.: "ACT 1075" -> "AST 1075", "ACT1075" -> "AST1075").
+ */
+export function ajustarCodigoDoMaterial(texto: string, para: MaterialTipo): string {
+  const codigo = para === '1070_temperado' ? 'ACT' : para === '1070_sem_temperado' ? 'AST' : null
+  if (!codigo) return texto
+  return texto.replace(/\b(ACT|AST)(?![A-Za-z])/g, codigo)
+}
+
 export function nomeDoMaterial(valor: string | null): string {
   if (!valor) return ''
   return MATERIAL_META[comoMaterial(valor)].label

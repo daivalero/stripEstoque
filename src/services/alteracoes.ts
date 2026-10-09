@@ -8,6 +8,9 @@ export interface AlteracaoComUsuario extends EstoqueAlteracao {
 }
 
 function mensagem(error: { message?: string }): string {
+  if (error.message?.includes('item_id')) {
+    return 'O banco precisa da migração 006_editar_itens.sql para registrar esta alteração.'
+  }
   if (error.message?.toLowerCase().includes('row-level security')) {
     return 'Seu usuário não pode registrar esta alteração.'
   }
@@ -48,5 +51,4 @@ export async function registrarAlteracoes(
   payloads: NovaAlteracao[],
 ): Promise<void> {
   const { error } = await supabase.from('estoque_alteracoes').insert(payloads)
-  if (error) throw new Error(mensagem(error))
-}
+  if (error) throw new Error(mensagem(error))}

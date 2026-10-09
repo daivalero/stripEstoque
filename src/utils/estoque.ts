@@ -120,6 +120,7 @@ export function classificarMaterial(
   const semTempera =
     familia.includes('S/T') ||
     texto.includes('ACST') ||
+    /\bAST(?![A-Z])/.test(texto) ||
     /SEM\s*TEMP/.test(texto)
   const temperado =
     !semTempera &&
