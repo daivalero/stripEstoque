@@ -129,6 +129,54 @@ export async function listarOpcoesFiltro(importacaoId: string): Promise<OpcoesFi
   }
 }
 
+export interface OpcoesDeEscolha {
+  fam_com: string[]
+  localizacao: string[]
+  superficie: string[]
+}
+
+let opcoesEmCache: { importacaoId: string; opcoes: OpcoesDeEscolha } | null = null
+
+/** Famílias, localizações e superfícies que existem no estoque importado (para as listas de escolha). */
+export async function listarOpcoesDeEscolha(): Promise<OpcoesDeEscolha> {
+  const importacao = await buscarImportacaoAtiva()
+  if (!importacao) return { fam_com: [], localizacao: [], superficie: [] }
+  if (opcoesEmCache?.importacaoId === importacao.id) return opcoesEmCache.opcoes
+
+  const conjuntos = {
+    fam_com: new Set<string>(),
+    localizacao: new Set<string>(),
+    superficie: new Set<string>(),
+  }
+  const tamanho = 1000
+  for (let inicio = 0; ; inicio += tamanho) {
+    const { data, error } = await supabase
+      .from('estoque_itens')
+      .select('fam_com, localizacao, superficie')
+      .eq('importacao_id', importacao.id)
+      .range(inicio, inicio + tamanho - 1)
+
+    if (error) throw new Error(mensagemErro(error))
+    for (const linha of data ?? []) {
+      for (const chave of ['fam_com', 'localizacao', 'superficie'] as const) {
+        const bruto = (linha[chave] as string | null)?.trim()
+        const valor = chave === 'localizacao' ? bruto?.toUpperCase() : bruto
+        if (valor && valor !== 'NÃO ENCONTRADO') conjuntos[chave].add(valor)
+      }
+    }
+    if (!data || data.length < tamanho) break
+  }
+
+  const ordenar = (conjunto: Set<string>) =>
+    [...conjunto].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }))
+  const opcoes = {
+    fam_com: ordenar(conjuntos.fam_com),
+    localizacao: ordenar(conjuntos.localizacao),
+    superficie: ordenar(conjuntos.superficie),
+  }
+  opcoesEmCache = { importacaoId: importacao.id, opcoes }
+  return opcoes
+}
 export async function buscarPorCodigo(codigo: string): Promise<EstoqueItem[]> {
   const importacao = await buscarImportacaoAtiva()
   if (!importacao) return []

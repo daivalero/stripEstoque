@@ -84,6 +84,8 @@
 
   html {
     -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
   body {
@@ -96,6 +98,8 @@
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Sem o efeito de puxar a página inteira ao rolar (atrapalha o app instalado). */
+    overscroll-behavior-y: none;
   }
 
   #root {
@@ -112,6 +116,27 @@
   textarea,
   select {
     font: inherit;
+    /* Evita o toque duplo dar zoom e atrasar o clique no celular. */
+    touch-action: manipulation;
+  }
+
+  /* iPhone dá zoom na tela se o campo tiver letra menor que 16px. */
+  @media (max-width: 1023px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 

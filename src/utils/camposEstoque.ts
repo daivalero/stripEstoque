@@ -30,13 +30,13 @@ export const CAMPOS: DefinicaoCampo[] = [
   { chave: 'item', rotulo: 'Item', titulo: 'Item', tipo: 'texto' },
   { chave: 'lote', rotulo: 'Lote', titulo: 'Lote', tipo: 'texto' },
   { chave: 'localizacao', rotulo: 'Localização', titulo: 'Localização', tipo: 'local' },
-  { chave: 'quantidade', rotulo: 'Quantidade', titulo: 'Quantidade (kg)', tipo: 'numero' },
+  { chave: 'quantidade', rotulo: 'Quantidade', titulo: 'Total (kg)', tipo: 'numero' },
   { chave: 'material', rotulo: 'Material', titulo: 'Material', tipo: 'material' },
   { chave: 'espessura', rotulo: 'Espessura', titulo: 'Espessura (mm)', tipo: 'numero' },
   { chave: 'largura', rotulo: 'Largura', titulo: 'Largura (mm)', tipo: 'numero' },
   { chave: 'descricao', rotulo: 'Descrição', titulo: 'Descrição', tipo: 'texto' },
   { chave: 'dep', rotulo: 'Depósito', titulo: 'Depósito', tipo: 'texto' },
-  { chave: 'fam_com', rotulo: 'Família', titulo: 'Família comercial', tipo: 'texto' },
+  { chave: 'fam_com', rotulo: 'Família', titulo: 'Família', tipo: 'texto' },
   { chave: 'estab', rotulo: 'Estabelecimento', titulo: 'Estabelecimento', tipo: 'texto' },
   { chave: 'superficie', rotulo: 'Superfície', titulo: 'Superfície', tipo: 'texto' },
 ]
@@ -124,16 +124,6 @@ export function diferencasEntre(antes: EstoqueItem, depois: EstoqueItem): Difere
     }
   }
   return lista
-}
-
-/**
- * A descrição e a família trazem o código do material: ACT (temperado) ou AST (sem têmpera).
- * Ao trocar o material, troca o código junto (ex.: "ACT 1075" -> "AST 1075", "ACT1075" -> "AST1075").
- */
-export function ajustarCodigoDoMaterial(texto: string, para: MaterialTipo): string {
-  const codigo = para === '1070_temperado' ? 'ACT' : para === '1070_sem_temperado' ? 'AST' : null
-  if (!codigo) return texto
-  return texto.replace(/\b(ACT|AST)(?![A-Za-z])/g, codigo)
 }
 
 export function nomeDoMaterial(valor: string | null): string {

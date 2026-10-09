@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Pencil, ScanLine } from 'lucide-react'
-import { Conferencia } from '@/components/estoque/Conferencia'
 import { FichaItem } from '@/components/estoque/FichaItem'
 import { MaterialBadge } from '@/components/estoque/MaterialBadge'
 import { Button } from '@/components/ui/Button'
@@ -29,7 +28,6 @@ export function Produto() {
   const [item, setItem] = useState<EstoqueItem | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
-  const [conferindo, setConferindo] = useState(false)
   const [editando, setEditando] = useState(false)
   const [salvando, setSalvando] = useState(false)
   const { user } = useAuth()
@@ -121,33 +119,19 @@ export function Produto() {
             <Campo rotulo="Item" valor={item.item} />
             <Campo rotulo="Lote" valor={item.lote ?? '—'} />
             <Campo rotulo="Localização ERP" valor={item.localizacao ?? '—'} />
-            <Campo rotulo="Quantidade" valor={formatarQuantidade(item.quantidade)} />
+            <Campo rotulo="Total (kg)" valor={formatarQuantidade(item.quantidade)} />
             <Campo rotulo="Superfície" valor={item.superficie ?? '—'} />
             <Campo rotulo="Família" valor={item.fam_com ?? '—'} />
             <Campo rotulo="Depósito" valor={item.dep ?? '—'} />
             <Campo rotulo="Estabelecimento" valor={item.estab ?? '—'} />
           </div>
 
-          <Button
-            variant="secondary"
-            size="lg"
-            fullWidth
-            className="mt-6"
-            onClick={() => setEditando(true)}
-          >
+          <Button size="lg" fullWidth className="mt-6" onClick={() => setEditando(true)}>
             <Pencil className="size-5" aria-hidden />
             Editar todos os campos
           </Button>
-
-          {!conferindo && (
-            <Button size="lg" fullWidth className="mt-6" onClick={() => setConferindo(true)}>
-              Conferir material
-            </Button>
-          )}
         </Card>
       )}
-
-      {item && conferindo && <Conferencia item={item} onSalvo={setItem} />}
 
       {item && editando && (
         <FichaItem
