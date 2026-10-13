@@ -8,10 +8,10 @@ export function AppLayout() {
     <div className="flex min-h-dvh bg-bg">
       <Sidebar />
 
-      <div className="flex min-h-dvh flex-1 flex-col">
+      <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
         <Header />
 
-        <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-28 pt-5 lg:px-8 lg:pb-10 lg:pt-8">
+        <main className="mx-auto w-full min-w-0 max-w-5xl flex-1 overflow-x-hidden px-4 pb-28 pt-5 lg:px-8 lg:pb-10 lg:pt-8">
           <Outlet />
         </main>
 

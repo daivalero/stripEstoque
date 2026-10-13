@@ -441,7 +441,11 @@ function abaLancarNoErp(aba: Worksheet, itens: ItemCorrigido[]) {
       estiloBase(celula, indice % 2 === 1, erp?.formato != null)
       if (erp?.formato) celula.numFmt = erp.formato
       if (coluna === 4) {
-        celula.font = { bold: true, size: 11, color: { argb: COR_MATERIAL[material] } }
+        celula.font = {
+          bold: true,
+          size: 11,
+          color: { argb: COR_MATERIAL[material] ?? COR.cinzaEscuro },
+        }
         if (alterados.has('Material')) celula.fill = fundo(COR.amarelo)
       }
       if (coluna === 5) {

@@ -1,6 +1,6 @@
 import { supabase } from '@/services/supabase'
-import { termosDeBusca } from '@/utils/estoque'
-import type { EstoqueImportacao, EstoqueItem, EstoqueItemInput, MaterialTipo } from '@/types'
+import { comoMaterial, termosDeBusca } from '@/utils/estoque'
+import type { EstoqueImportacao, EstoqueItem, EstoqueItemInput } from '@/types'
 
 const PAGINA = 40
 
@@ -220,28 +220,27 @@ export async function buscarItem(id: string): Promise<EstoqueItem | null> {
 
 export async function contarPorMaterial(
   importacaoId: string,
-): Promise<Record<MaterialTipo, number>> {
-  const tipos: MaterialTipo[] = [
-    '1070_temperado',
-    '1070_sem_temperado',
-    'inox',
-    'outro',
-  ]
+): Promise<Record<string, number>> {
+  const contagens: Record<string, number> = {}
+  const tamanho = 1000
 
-  const contagens = await Promise.all(
-    tipos.map(async (tipo) => {
-      const { count, error } = await supabase
-        .from('estoque_itens')
-        .select('id', { count: 'exact', head: true })
-        .eq('importacao_id', importacaoId)
-        .eq('material', tipo)
+  for (let inicio = 0; ; inicio += tamanho) {
+    const { data, error } = await supabase
+      .from('estoque_itens')
+      .select('material')
+      .eq('importacao_id', importacaoId)
+      .order('id', { ascending: true })
+      .range(inicio, inicio + tamanho - 1)
 
-      if (error) throw new Error(mensagemErro(error))
-      return [tipo, count ?? 0] as const
-    }),
-  )
+    if (error) throw new Error(mensagemErro(error))
+    for (const linha of data ?? []) {
+      const material = comoMaterial(linha.material as string | null)
+      contagens[material] = (contagens[material] ?? 0) + 1
+    }
+    if (!data || data.length < tamanho) break
+  }
 
-  return Object.fromEntries(contagens) as Record<MaterialTipo, number>
+  return contagens
 }
 
 const MENSAGEM_MIGRACAO =

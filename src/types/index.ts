@@ -33,7 +33,11 @@ export interface EstoqueAlteracao {
   created_at: string
 }
 
-export type MaterialTipo = '1070_temperado' | '1070_sem_temperado' | 'inox' | 'outro'
+/**
+ * Identificador do material. Os quatro valores abaixo têm visual próprio, mas
+ * outras famílias vindas da coluna "Fam Com." também são preservadas.
+ */
+export type MaterialTipo = string
 
 export interface MaterialMeta {
   id: MaterialTipo
@@ -86,7 +90,7 @@ export interface EstoqueItemInput {
   material: MaterialTipo
 }
 
-export const MATERIAL_META: Record<MaterialTipo, MaterialMeta> = {
+export const MATERIAL_META: Record<string, MaterialMeta> = {
   '1070_temperado': {
     id: '1070_temperado',
     label: '1070 Temperado',

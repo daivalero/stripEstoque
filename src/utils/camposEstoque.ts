@@ -1,5 +1,10 @@
 import { MATERIAL_META, type EstoqueItem, type MaterialTipo } from '@/types'
-import { comoMaterial, normalizarLocalizacao, parseNumero } from '@/utils/estoque'
+import {
+  comoMaterial,
+  normalizarLocalizacao,
+  parseNumero,
+  rotuloMaterial,
+} from '@/utils/estoque'
 
 export type ChaveCampo =
   | 'item'
@@ -128,7 +133,7 @@ export function diferencasEntre(antes: EstoqueItem, depois: EstoqueItem): Difere
 
 export function nomeDoMaterial(valor: string | null): string {
   if (!valor) return ''
-  return MATERIAL_META[comoMaterial(valor)].label
+  return rotuloMaterial(valor)
 }
 
 export const OPCOES_MATERIAL: { valor: MaterialTipo; rotulo: string }[] = (

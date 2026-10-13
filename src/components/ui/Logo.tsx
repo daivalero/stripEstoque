@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { cn } from '@/utils/cn'
 
 interface LogoProps {
@@ -13,15 +14,21 @@ const sizeClasses = {
 
 export function Logo({ variant = 'compact', className }: LogoProps) {
   return (
-    <img
-      src="/brand/stripsteel-logo.png"
-      alt="Stripsteel"
-      className={cn(
-        'object-contain object-left',
-        sizeClasses[variant],
-        className,
-      )}
-      draggable={false}
-    />
+    <Link
+      to="/"
+      aria-label="Ir para o início"
+      className="inline-flex w-fit rounded-lg"
+    >
+      <img
+        src="/brand/stripsteel-logo.png"
+        alt="Stripsteel"
+        className={cn(
+          'object-contain object-left',
+          sizeClasses[variant],
+          className,
+        )}
+        draggable={false}
+      />
+    </Link>
   )
 }

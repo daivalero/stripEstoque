@@ -13,7 +13,6 @@ import { Card } from '@/components/ui/Card'
 import { MaterialBadge } from '@/components/estoque/MaterialBadge'
 import { useAuth } from '@/hooks/useAuth'
 import { buscarImportacaoAtiva, contarPorMaterial } from '@/services/estoque'
-import type { MaterialTipo } from '@/types'
 import { isAdmin } from '@/utils/estoque'
 
 const quickActions = [
@@ -43,12 +42,6 @@ const quickActions = [
   },
 ] as const
 
-const materiaisResumo: MaterialTipo[] = [
-  '1070_temperado',
-  '1070_sem_temperado',
-  'inox',
-]
-
 const container = {
   hidden: { opacity: 0 },
   show: {
@@ -64,8 +57,12 @@ const item = {
 
 export function Dashboard() {
   const { displayName, isDemo, profile } = useAuth()
-  const [contagens, setContagens] = useState<Partial<Record<MaterialTipo, number>>>({})
+  const [contagens, setContagens] = useState<Record<string, number>>({})
   const [totalItens, setTotalItens] = useState<number | null>(null)
+  const materiaisResumo = Object.entries(contagens).sort(
+    ([nomeA, quantidadeA], [nomeB, quantidadeB]) =>
+      quantidadeB - quantidadeA || nomeA.localeCompare(nomeB, 'pt-BR'),
+  )
   const acoes = quickActions.filter(
     (acao) => acao.to !== '/importar' || isAdmin(profile?.role),
   )
@@ -182,18 +179,21 @@ export function Dashboard() {
         </h3>
         <Card padding="md">
           <ul className="divide-y divide-border">
-            {materiaisResumo.map((tipo) => (
+            {materiaisResumo.map(([tipo, quantidade]) => (
               <li
                 key={tipo}
                 className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
               >
                 <MaterialBadge tipo={tipo} />
                 <span className="text-sm font-semibold text-text">
-                  {contagens[tipo] ?? '—'}
+                  {quantidade}
                 </span>
               </li>
             ))}
           </ul>
+          {materiaisResumo.length === 0 && (
+            <p className="text-sm text-text-secondary">Nenhum material importado.</p>
+          )}
           <p className="mt-3 text-xs text-text-muted">
             {totalItens == null
               ? 'Contagens disponíveis após importar o estoque'

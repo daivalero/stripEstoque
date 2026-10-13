@@ -159,4 +159,30 @@
   .safe-top {
     padding-top: env(safe-area-inset-top, 0px);
   }
+
+  .historico-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primary-soft) var(--color-bg-elevated);
+    scrollbar-gutter: stable;
+  }
+
+  .historico-scroll::-webkit-scrollbar {
+    width: 10px;
+  }
+
+  .historico-scroll::-webkit-scrollbar-track {
+    background: var(--color-bg-elevated);
+    border-radius: 999px;
+  }
+
+  .historico-scroll::-webkit-scrollbar-thumb {
+    min-height: 44px;
+    border: 2px solid var(--color-bg-elevated);
+    border-radius: 999px;
+    background: linear-gradient(180deg, #6366f1, #8b5cf6, #f43f5e);
+  }
+
+  .historico-scroll::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #7772ff, #9d70ff, #fb5873);
+  }
 }

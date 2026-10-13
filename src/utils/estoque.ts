@@ -1,4 +1,9 @@
-import { MATERIAL_META, type EstoqueItemInput, type MaterialTipo } from '@/types'
+import {
+  MATERIAL_META,
+  type EstoqueItemInput,
+  type MaterialMeta,
+  type MaterialTipo,
+} from '@/types'
 
 const HEADER_ALIASES: Record<string, keyof EstoqueItemInput | 'ignorar'> = {
   descricao: 'descricao',
@@ -116,18 +121,31 @@ export function classificarMaterial(
 
   if (texto.includes('INOX')) return 'inox'
 
-  const familia = (famCom ?? '').toUpperCase().replace(/\s+/g, ' ').trim()
+  const familia = (famCom ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+  const familiaCompacta = familia.replace(/\s+/g, '')
+  const eh1070 = texto.includes('1070')
   const semTempera =
-    familia.includes('S/T') ||
+    familiaCompacta.includes('S/T') ||
     texto.includes('ACST') ||
     /\bAST(?![A-Z])/.test(texto) ||
     /SEM\s*TEMP/.test(texto)
   const temperado =
     !semTempera &&
-    (familia === 'AC T' || texto.includes('ACT') || texto.includes('TEMPER'))
+    (familiaCompacta === 'ACT' || texto.includes('ACT') || texto.includes('TEMPER'))
 
-  if (semTempera) return '1070_sem_temperado'
-  if (temperado) return '1070_temperado'
+  if (eh1070 && semTempera) return '1070_sem_temperado'
+  if (eh1070 && temperado) return '1070_temperado'
+
+  // Não reduz famílias como AST1010, ACT1075 etc. a "Outro".
+  if (familia) return familia
+
+  const codigoNaDescricao = texto.match(/\b(?:AST|ACT|ACST|SAE|AISI)\s*-?\s*\d{3,4}[A-Z]?\b/)
+  if (codigoNaDescricao) return codigoNaDescricao[0].replace(/[\s-]+/g, '')
   return 'outro'
 }
 
@@ -242,6 +260,43 @@ export function isAdmin(role: string | null | undefined): boolean {
 }
 
 export function comoMaterial(value: string | null | undefined): MaterialTipo {
-  if (value && value in MATERIAL_META) return value as MaterialTipo
-  return 'outro'
+  return value?.trim() || 'outro'
+}
+
+const CORES_MATERIAIS_DINAMICOS = [
+  { colorClass: 'text-cyan-400', dotClass: 'bg-cyan-400' },
+  { colorClass: 'text-amber-400', dotClass: 'bg-amber-400' },
+  { colorClass: 'text-fuchsia-400', dotClass: 'bg-fuchsia-400' },
+  { colorClass: 'text-lime-400', dotClass: 'bg-lime-400' },
+  { colorClass: 'text-sky-400', dotClass: 'bg-sky-400' },
+  { colorClass: 'text-rose-400', dotClass: 'bg-rose-400' },
+] as const
+
+export function rotuloMaterial(value: string | null | undefined): string {
+  const material = comoMaterial(value)
+  const conhecido = MATERIAL_META[material]
+  if (conhecido) return conhecido.label
+  return material
+    .replace(/[_-]+/g, ' ')
+    .replace(/([A-Z]+)(\d+)/g, '$1 $2')
+    .replace(/(\d+)([A-Z]+)/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export function metaDoMaterial(value: string | null | undefined): MaterialMeta {
+  const material = comoMaterial(value)
+  const conhecido = MATERIAL_META[material]
+  if (conhecido) return conhecido
+
+  let hash = 0
+  for (const caractere of material) {
+    hash = (hash * 31 + caractere.charCodeAt(0)) >>> 0
+  }
+  const cores = CORES_MATERIAIS_DINAMICOS[hash % CORES_MATERIAIS_DINAMICOS.length]
+  return {
+    id: material,
+    label: rotuloMaterial(material),
+    ...cores,
+  }
 }
