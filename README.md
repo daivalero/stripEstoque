@@ -9,9 +9,14 @@ Sistema web/PWA para conferência e organização do estoque físico de uma meta
 - Supabase (Auth + PostgreSQL)
 - Framer Motion + Lucide React
 
-## Fase atual
+## PWA
 
-**Fase 1** — arquitetura, design system, login, layout e dashboard.
+- Instalável no Android, iPhone, iPad e desktop.
+- No Android/Chrome, use o aviso de instalação exibido pelo app.
+- No iPhone/iPad, abra o menu **Compartilhar** e toque em
+  **Adicionar à Tela de Início**.
+- A interface abre sem conexão; consultas e alterações de estoque exigem
+  conexão para evitar dados desatualizados.
 
 ## Como rodar
 
@@ -29,10 +34,18 @@ npm install
 npm run dev
 ```
 
-3. Abra o endereço local no navegador (ou no iPhone na mesma rede).
+3. Abra o endereço local no navegador (ou no celular na mesma rede).
+
+Para validar a versão instalável de produção:
+
+```bash
+npm run build
+npm run preview -- --host
+```
 
 ## Observações
 
 - Sem as chaves do Supabase, a tela de login aparece, mas a autenticação não funciona.
 - Nunca coloque `SUPABASE_SERVICE_ROLE_KEY` no frontend.
-- Scanner, Excel, inventário e PWA entram nas fases seguintes.
+- A Vercel deve receber `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` nas
+  variáveis de ambiente do projeto.

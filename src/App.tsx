@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { PwaManager } from '@/components/pwa/PwaManager'
 import { ToastProvider } from '@/components/ui/Toast'
 import { Alteracoes } from '@/pages/Alteracoes'
 import { Configuracoes } from '@/pages/Configuracoes'
@@ -19,6 +20,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
+          <PwaManager />
           <Routes>
             <Route path="/login" element={<Login />} />
 
