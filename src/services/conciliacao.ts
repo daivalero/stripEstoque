@@ -14,6 +14,8 @@ export type SituacaoCampo = 'aplicada' | 'faltando' | 'lancar' | 'fora'
 
 export interface CampoConciliado {
   campo: string
+  /** Valor existente antes da correção feita no app. */
+  anterior: string | null
   /** Valor que o app gravou (o que deveria estar no ERP). */
   esperado: string | null
   /** Valor que o estoque importado tem agora. */
@@ -111,6 +113,7 @@ export function conciliar(
 
       campos.push({
         campo: modificacao.campo,
+        anterior: modificacao.anterior,
         esperado: modificacao.novo,
         atual,
         situacao,

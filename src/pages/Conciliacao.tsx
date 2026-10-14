@@ -5,7 +5,12 @@ import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useHistorico } from '@/contexts/HistoricoContext'
-import { conciliar, type ItemConciliado, type SituacaoCampo } from '@/services/conciliacao'
+import {
+  conciliar,
+  type CampoConciliado,
+  type ItemConciliado,
+  type SituacaoCampo,
+} from '@/services/conciliacao'
 import { buscarImportacaoAtiva, listarTodosItens } from '@/services/estoque'
 import type { EstoqueImportacao, EstoqueItem } from '@/types'
 import { valorLegivel } from '@/utils/camposEstoque'
@@ -338,21 +343,7 @@ function CartaoConciliado({ item }: { item: ItemConciliado }) {
         {item.campos.map((campo) => (
           <div key={campo.campo} className="rounded-xl bg-bg-elevated px-3 py-2.5">
             <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">{campo.campo}</p>
-            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
-              <span className="text-text-secondary">Deveria ser</span>
-              <span className="rounded-lg bg-success-soft px-2.5 py-1 font-bold text-success">
-                {valorLegivel(campo.campo, campo.esperado)}
-              </span>
-              {campo.situacao !== 'aplicada' && campo.situacao !== 'fora' && (
-                <>
-                  <ArrowRight className="size-4 text-text-muted" aria-hidden />
-                  <span className="text-text-secondary">está</span>
-                  <span className="rounded-lg bg-danger-soft px-2.5 py-1 font-medium text-danger">
-                    {valorLegivel(campo.campo, campo.atual)}
-                  </span>
-                </>
-              )}
-            </div>
+            <ComparacaoCampo campo={campo} />
             <p className="mt-1.5 flex items-center gap-1.5 text-xs text-text-muted">
               <Clock className="size-3" aria-hidden />
               Corrigido em {formatarDataHora(campo.feitoEm)} · {campo.nome}
@@ -376,5 +367,50 @@ function CartaoConciliado({ item }: { item: ItemConciliado }) {
     </Link>
   ) : (
     conteudo
+  )
+}
+
+function ComparacaoCampo({ campo }: { campo: CampoConciliado }) {
+  if (campo.situacao === 'lancar') {
+    return (
+      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-text-secondary">Era</span>
+        <span className="rounded-lg bg-danger-soft px-2.5 py-1 font-medium text-danger line-through decoration-danger/60">
+          {valorLegivel(campo.campo, campo.anterior)}
+        </span>
+        <ArrowRight className="size-4 text-text-muted" aria-hidden />
+        <span className="text-text-secondary">corrigido para</span>
+        <span className="rounded-lg bg-success-soft px-2.5 py-1 font-bold text-success">
+          {valorLegivel(campo.campo, campo.esperado)}
+        </span>
+      </div>
+    )
+  }
+
+  if (campo.situacao === 'faltando') {
+    return (
+      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-text-secondary">Deveria ser</span>
+        <span className="rounded-lg bg-success-soft px-2.5 py-1 font-bold text-success">
+          {valorLegivel(campo.campo, campo.esperado)}
+        </span>
+        <ArrowRight className="size-4 text-text-muted" aria-hidden />
+        <span className="text-text-secondary">no ERP está</span>
+        <span className="rounded-lg bg-danger-soft px-2.5 py-1 font-medium text-danger">
+          {valorLegivel(campo.campo, campo.atual)}
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
+      <span className="text-text-secondary">
+        {campo.situacao === 'aplicada' ? 'Confirmado no ERP' : 'Última correção'}
+      </span>
+      <span className="rounded-lg bg-success-soft px-2.5 py-1 font-bold text-success">
+        {valorLegivel(campo.campo, campo.esperado)}
+      </span>
+    </div>
   )
 }

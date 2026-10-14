@@ -79,9 +79,9 @@ function criarLeitorNativo(): LeitorNativo | null {
 
 function codigoDeEtiqueta(codigo: string): string | null {
   const texto = codigo.trim().replace(/^\]C\d/, '')
-  const etiqueta = texto.match(/\d{2,4};\d+\/\d+;\d+/)
+  const etiqueta = texto.match(/\d{2,4};\d+\/\d+[A-Z]*;\d+/i)
   if (etiqueta) return etiqueta[0]
-  if (/^\d{4,}\/\d+$/.test(texto)) return texto
+  if (/^\d{4,}\/\d+[A-Z]*$/i.test(texto)) return texto.toUpperCase()
   return null
 }
 

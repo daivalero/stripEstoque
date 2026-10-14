@@ -52,7 +52,10 @@ export function termosDeBusca(codigo: string): string[] {
 
   for (const parte of termo.split(/[;|]/)) {
     const texto = parte.trim()
-    if (/^\d+\/\d+$/.test(texto)) termos.add(texto)
+    if (/^\d+\/\d+[A-Z]*$/i.test(texto)) {
+      termos.add(texto)
+      termos.add(texto.toUpperCase())
+    }
   }
 
   const pedacos = termo.split('/').map((parte) => parte.trim())
@@ -60,16 +63,19 @@ export function termosDeBusca(codigo: string): string[] {
     pedacos.length === 3 &&
     /^\d{2,4}$/.test(pedacos[0]) &&
     /^\d+$/.test(pedacos[1]) &&
-    /^\d+$/.test(pedacos[2])
+    /^\d+[A-Z]*$/i.test(pedacos[2])
   ) {
-    termos.add(`${pedacos[1]}/${pedacos[2]}`)
+    termos.add(`${pedacos[1]}/${pedacos[2]}`.toUpperCase())
   }
 
   return [...termos]
 }
 
 export function loteDaEtiqueta(codigo: string): string | null {
-  return termosDeBusca(codigo).find((termo) => /^\d+\/\d+$/.test(termo)) ?? null
+  return (
+    termosDeBusca(codigo).find((termo) => /^\d+\/\d+[A-Z]*$/i.test(termo))?.toUpperCase() ??
+    null
+  )
 }
 
 export function normalizarLocalizacao(value: unknown): string | null {
