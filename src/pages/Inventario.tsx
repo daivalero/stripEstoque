@@ -4,13 +4,24 @@ import { CheckCircle2, ChevronRight, MapPin, Search } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { contarResolvidos, useInventarioMarcas } from '@/hooks/useInventarioMarcas'
+import { useHistorico } from '@/contexts/HistoricoContext'
+import { contarResolvidos, useInventarioMarcas, type Marcas } from '@/hooks/useInventarioMarcas'
 import { buscarImportacaoAtiva } from '@/services/estoque'
 import { listarLocalizacoes, type LocalizacaoResumo } from '@/services/inventario'
 import type { EstoqueImportacao } from '@/types'
 import { formatarNumero } from '@/utils/estoque'
 
 const LIMITE_LISTA = 120
+
+/** Itens da localização já conferidos (no banco, de qualquer estoque, ou neste aparelho). */
+function itensFeitos(
+  local: LocalizacaoResumo,
+  marcas: Marcas,
+  conferencias: Map<string, unknown>,
+): number {
+  const noBanco = local.chaves.filter((chave) => conferencias.has(chave)).length
+  return Math.min(Math.max(contarResolvidos(marcas, local.localizacao), noBanco), local.total)
+}
 
 export function Inventario() {
   const [importacao, setImportacao] = useState<EstoqueImportacao | null>(null)
@@ -19,6 +30,9 @@ export function Inventario() {
   const [erro, setErro] = useState<string | null>(null)
   const [busca, setBusca] = useState('')
   const { marcas } = useInventarioMarcas(importacao?.id ?? null)
+  const { conferencias } = useHistorico()
+
+  const feitosEm = (local: LocalizacaoResumo) => itensFeitos(local, marcas, conferencias)
 
   useEffect(() => {
     let ativo = true
@@ -56,12 +70,9 @@ export function Inventario() {
 
   const resumo = useMemo(() => {
     const total = locais.reduce((soma, local) => soma + local.total, 0)
-    const resolvidos = locais.reduce(
-      (soma, local) => soma + Math.min(contarResolvidos(marcas, local.localizacao), local.total),
-      0,
-    )
+    const resolvidos = locais.reduce((soma, local) => soma + itensFeitos(local, marcas, conferencias), 0)
     return { total, resolvidos }
-  }, [locais, marcas])
+  }, [locais, marcas, conferencias])
 
   return (
     <div className="mx-auto flex max-w-lg flex-col gap-5 animate-fade-in">
@@ -105,7 +116,7 @@ export function Inventario() {
             </p>
             <Barra feito={resumo.resolvidos} total={resumo.total} />
             <p className="mt-3 text-xs text-text-muted">
-              A conferência fica salva neste aparelho para o estoque importado atual.
+              A conferência fica salva no sistema e continua valendo nos próximos estoques importados.
             </p>
           </Card>
 
@@ -134,7 +145,7 @@ export function Inventario() {
 
           <div className="flex flex-col gap-3">
             {visiveis.map((local) => {
-              const feito = Math.min(contarResolvidos(marcas, local.localizacao), local.total)
+              const feito = feitosEm(local)
               const completo = feito >= local.total
               return (
                 <Link

@@ -45,6 +45,23 @@ export function apagarMarcasLocais() {
   }
 }
 
+/** Tira a marcação de um item em todos os estoques importados guardados neste aparelho. */
+export function removerMarcasDoItem(itemId: string) {
+  try {
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const nome = window.localStorage.key(i)
+      if (!nome?.startsWith(PREFIXO)) continue
+      const marcas = JSON.parse(window.localStorage.getItem(nome) ?? '{}') as Marcas
+      if (itemId in marcas) {
+        delete marcas[itemId]
+        window.localStorage.setItem(nome, JSON.stringify(marcas))
+      }
+    }
+  } catch {
+    // Sem acesso ao armazenamento local: nada a limpar.
+  }
+}
+
 /** Conferência do inventário guardada neste aparelho, separada por importação. */
 export function useInventarioMarcas(importacaoId: string | null) {
   const [marcas, setMarcas] = useState<Marcas>({})

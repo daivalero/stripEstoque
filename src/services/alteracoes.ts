@@ -1,3 +1,4 @@
+import { avisarMudancaNoHistorico } from '@/services/historicoEventos'
 import { supabase } from '@/services/supabase'
 import type { EstoqueAlteracao } from '@/types'
 
@@ -27,19 +28,7 @@ export async function listarAlteracoes(limit = 80): Promise<AlteracaoComUsuario[
   if (error) throw new Error('Não foi possível carregar o histórico.')
 
   const linhas = (data ?? []) as EstoqueAlteracao[]
-  const ids = [...new Set(linhas.map((linha) => linha.user_id))]
-  const nomes = new Map<string, string>()
-
-  if (ids.length > 0) {
-    const { data: perfis } = await supabase
-      .from('profiles')
-      .select('id, full_name')
-      .in('id', ids)
-
-    for (const perfil of perfis ?? []) {
-      nomes.set(perfil.id as string, (perfil.full_name as string) || 'Usuário')
-    }
-  }
+  const nomes = await buscarNomes(linhas.map((linha) => linha.user_id))
 
   return linhas.map((linha) => ({
     ...linha,
@@ -47,8 +36,23 @@ export async function listarAlteracoes(limit = 80): Promise<AlteracaoComUsuario[
   }))
 }
 
+/** Nome de cada usuário (id -> nome) para mostrar quem fez a alteração. */
+export async function buscarNomes(userIds: string[]): Promise<Map<string, string>> {
+  const ids = [...new Set(userIds)]
+  const nomes = new Map<string, string>()
+  if (ids.length === 0) return nomes
+
+  const { data: perfis } = await supabase.from('profiles').select('id, full_name').in('id', ids)
+  for (const perfil of perfis ?? []) {
+    nomes.set(perfil.id as string, (perfil.full_name as string) || 'Usuário')
+  }
+  return nomes
+}
 export async function registrarAlteracoes(
   payloads: NovaAlteracao[],
 ): Promise<void> {
   const { error } = await supabase.from('estoque_alteracoes').insert(payloads)
-  if (error) throw new Error(mensagem(error))}
+  if (error) throw new Error(mensagem(error))
+  avisarMudancaNoHistorico()
+}
+

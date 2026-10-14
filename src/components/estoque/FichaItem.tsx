@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { MaterialBadge } from '@/components/estoque/MaterialBadge'
+import { HistoricoDoItem } from '@/components/estoque/ModificacoesDoItem'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
@@ -181,6 +182,10 @@ export function FichaItem({
               </span>
             </div>
           )}
+
+          <div className="mt-4 empty:hidden">
+            <HistoricoDoItem item={original.item} lote={original.lote} atual={base} maximo={2} />
+          </div>
 
           <div className="mt-5 grid gap-4">
             {CHAVES_EDITAVEIS.map((chave) => {

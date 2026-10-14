@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   ClipboardCheck,
+  GitCompare,
   History,
   Home,
   LogOut,
@@ -20,6 +21,7 @@ const mainNav = [
   { to: '/estoque', label: 'Estoque', icon: Package },
   { to: '/inventario', label: 'Inventário', icon: ClipboardCheck },
   { to: '/historico', label: 'Histórico', icon: History },
+  { to: '/conciliacao', label: 'Conciliação', icon: GitCompare },
   { to: '/importar', label: 'Importar', icon: Upload },
 ] as const
 

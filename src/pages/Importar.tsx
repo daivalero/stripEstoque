@@ -1,13 +1,15 @@
-import { useState, type ChangeEvent } from 'react'
+import { useMemo, useState, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileSpreadsheet } from 'lucide-react'
+import { FileSpreadsheet, History } from 'lucide-react'
 import { MaterialBadge } from '@/components/estoque/MaterialBadge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { useHistorico } from '@/contexts/HistoricoContext'
 import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/components/ui/Toast'
 import { importarEstoque } from '@/services/estoque'
 import type { PreviaImportacao } from '@/services/excel'
+import { chaveDoItem } from '@/services/historico'
 import { formatarMedida, formatarQuantidade, isAdmin } from '@/utils/estoque'
 
 export function Importar() {
@@ -18,6 +20,13 @@ export function Importar() {
   const [importando, setImportando] = useState(false)
   const [previa, setPrevia] = useState<PreviaImportacao | null>(null)
   const [erro, setErro] = useState<string | null>(null)
+  const { porItem } = useHistorico()
+
+  // Itens desta planilha que já foram modificados em algum estoque importado antes.
+  const jaModificados = useMemo(() => {
+    if (!previa) return 0
+    return previa.itens.filter((item) => porItem.has(chaveDoItem(item.item, item.lote))).length
+  }, [previa, porItem])
 
   if (!isAdmin(profile?.role)) {
     return (
@@ -139,6 +148,18 @@ export function Importar() {
             <p className="mt-1 text-sm text-warning">
               {previa.linhasIgnoradas} linhas sem item foram ignoradas.
             </p>
+          )}
+
+          {jaModificados > 0 && (
+            <div className="mt-4 flex gap-3 rounded-2xl border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-warning">
+              <History className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <span>
+                <strong>{jaModificados}</strong>{' '}
+                {jaModificados === 1 ? 'item desta planilha já foi modificado' : 'itens desta planilha já foram modificados'}{' '}
+                no histórico. Depois de importar, cada um aparece marcado com o dia e a hora, no estoque e
+                no inventário.
+              </span>
+            </div>
           )}
 
           <ul className="mt-5 flex flex-col gap-3">

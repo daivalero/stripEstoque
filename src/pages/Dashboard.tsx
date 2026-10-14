@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import {
   ArrowRight,
   ClipboardList,
+  GitCompare,
   History,
   ScanLine,
   Search,
@@ -34,6 +35,12 @@ const quickActions = [
     label: 'Alterações',
     description: 'Ver histórico',
     icon: History,
+  },
+  {
+    to: '/conciliacao',
+    label: 'Conciliação',
+    description: 'O que falta no ERP',
+    icon: GitCompare,
   },
   {
     to: '/importar',

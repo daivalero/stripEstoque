@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Check, CircleHelp, MapPinned, Pencil, ScanLine, Undo2, X } from 'lucide-react'
 import { FichaItem } from '@/components/estoque/FichaItem'
 import { MaterialBadge } from '@/components/estoque/MaterialBadge'
+import { EtiquetaModificado, HistoricoDoItem } from '@/components/estoque/ModificacoesDoItem'
 import { BarcodeScanner } from '@/components/scanner/BarcodeScanner'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -10,15 +11,30 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Input } from '@/components/ui/Input'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
+import { useHistorico } from '@/contexts/HistoricoContext'
 import { useAuth } from '@/hooks/useAuth'
 import { useInventarioMarcas, type Marca, type Marcas } from '@/hooks/useInventarioMarcas'
 import { registrarAlteracoes } from '@/services/alteracoes'
+import {
+  apagarConferencia,
+  registrarConferencia,
+  type Conferencia,
+  type StatusConferencia,
+} from '@/services/conferencias'
 import { montarAlteracoes, salvarEdicao } from '@/services/edicao'
 import { buscarImportacaoAtiva, buscarPorCodigo } from '@/services/estoque'
+import { buscarPorLotes, chaveDoItem } from '@/services/historico'
 import { listarItensDaLocalizacao } from '@/services/inventario'
 import type { EstoqueImportacao, EstoqueItem } from '@/types'
 import { diferencasEntre, valorPadrao, type Diferenca } from '@/utils/camposEstoque'
-import { comoMaterial, formatarMedida, formatarQuantidade, loteDaEtiqueta } from '@/utils/estoque'
+import { formatarDataHora } from '@/utils/data'
+import {
+  comoMaterial,
+  formatarMedida,
+  formatarQuantidade,
+  loteDaEtiqueta,
+  normalizarLocalizacao,
+} from '@/utils/estoque'
 
 const NAO_ENCONTRADO = 'NÃO ENCONTRADO'
 
@@ -47,6 +63,8 @@ export function InventarioLocal() {
   const [escolha, setEscolha] = useState<{ itens: EstoqueItem[]; codigo: string } | null>(null)
   const [ausentando, setAusentando] = useState<EstoqueItem | null>(null)
 
+  const { porItem, carregado: historicoCarregado, conferencias, conferenciaDe } = useHistorico()
+  const [deHistorico, setDeHistorico] = useState<EstoqueItem[]>([])
   const { marcas, marcar, desmarcar } = useInventarioMarcas(importacao?.id ?? null)
   const marcasRef = useRef<Marcas>(marcas)
 
@@ -81,11 +99,58 @@ export function InventarioLocal() {
     }
   }, [local])
 
+  // Itens que, pelo histórico, foram levados para este local em um estoque anterior,
+  // mas que o ERP importado agora ainda mostra em outro lugar.
+  useEffect(() => {
+    if (!importacao || !historicoCarregado) return
+    let ativo = true
+    const destino = normalizarLocalizacao(local)
+    const chaves = new Set<string>()
+    const lotes: string[] = []
+    for (const [chave, lista] of porItem) {
+      const ultimaMudanca = lista.find((modificacao) => modificacao.campo === 'Localização')
+      if (!ultimaMudanca || normalizarLocalizacao(ultimaMudanca.novo) !== destino) continue
+      chaves.add(chave)
+      if (lista[0].lote) lotes.push(lista[0].lote)
+    }
+
+    async function procurarNoEstoque() {
+      try {
+        const achados = lotes.length > 0 ? await buscarPorLotes(importacao!.id, lotes) : []
+        if (!ativo) return
+        setDeHistorico(
+          achados.filter(
+            (item) =>
+              chaves.has(chaveDoItem(item.item, item.lote)) &&
+              normalizarLocalizacao(item.localizacao) !== destino,
+          ),
+        )
+      } catch {
+        if (ativo) setDeHistorico([])
+      }
+    }
+
+    void procurarNoEstoque()
+    return () => {
+      ativo = false
+    }
+  }, [importacao, historicoCarregado, porItem, local])
+
+  const esperadosAqui = useMemo(
+    () =>
+      deHistorico.filter(
+        (item) => !marcas[item.id] && !conferencias.has(chaveDoItem(item.item, item.lote)),
+      ),
+    [deHistorico, marcas, conferencias],
+  )
+
   const ordenados = useMemo(() => {
-    const pendentes = itens.filter((item) => !marcas[item.id])
-    const resolvidos = itens.filter((item) => marcas[item.id])
+    const feito = (item: EstoqueItem) =>
+      Boolean(marcas[item.id]) || conferencias.has(chaveDoItem(item.item, item.lote))
+    const pendentes = itens.filter((item) => !feito(item))
+    const resolvidos = itens.filter(feito)
     return [...pendentes, ...resolvidos]
-  }, [itens, marcas])
+  }, [itens, marcas, conferencias])
 
   const encontradosAqui = useMemo(
     () =>
@@ -95,11 +160,33 @@ export function InventarioLocal() {
     [marcas, local],
   )
 
-  const resolvidos = itens.filter((item) => marcas[item.id]).length
+  const resolvidos = itens.filter(
+    (item) => marcas[item.id] || conferencias.has(chaveDoItem(item.item, item.lote)),
+  ).length
   const percentual = itens.length === 0 ? 0 : Math.round((resolvidos / itens.length) * 100)
+
+  /** Guarda a conferência no banco (vale para os próximos estoques). Falha aqui não trava o inventário. */
+  async function guardarConferencia(
+    item: Pick<EstoqueItem, 'item' | 'lote'>,
+    status: StatusConferencia,
+    localizacao: string | null,
+  ) {
+    try {
+      await registrarConferencia({
+        userId: user?.id,
+        item: item.item,
+        lote: item.lote,
+        localizacao,
+        status,
+      })
+    } catch (error) {
+      warning(error instanceof Error ? error.message : 'A conferência não foi salva no sistema.')
+    }
+  }
 
   function conferido(item: EstoqueItem) {
     marcar(item.id, { status: 'ok', de: item.localizacao })
+    void guardarConferencia(item, 'ok', local)
   }
 
   function abrirFicha(original: EstoqueItem) {
@@ -143,6 +230,7 @@ export function InventarioLocal() {
 
       const localErp = valorPadrao(original, 'localizacao')
       const movido = localNovo !== localErp
+      await guardarConferencia(novo, movido ? 'movido' : 'ok', localNovo ?? local)
       marcar(original.id, {
         status: movido ? 'movido' : 'ok',
         de: original.localizacao,
@@ -174,6 +262,7 @@ export function InventarioLocal() {
         ),
       )
       marcar(item.id, { status: 'ausente', de: item.localizacao, original: item })
+      await guardarConferencia(item, 'ausente', local)
       setAusentando(null)
       success('Item marcado como não encontrado')
     } catch (error) {
@@ -186,7 +275,21 @@ export function InventarioLocal() {
   /** Desfaz a marcação gravando a correção inversa, para o histórico continuar coerente. */
   async function desfazer(item: EstoqueItem) {
     const marca = marcasRef.current[item.id]
-    if (!marca) return
+    if (!marca) {
+      // Conferido em outro estoque importado: só tira a conferência.
+      if (conferenciaDe(item.item, item.lote)) {
+        setSalvando(true)
+        try {
+          await apagarConferencia(item.item, item.lote)
+          success('Conferência desfeita')
+        } catch (error) {
+          toastErro(error instanceof Error ? error.message : 'Não foi possível desfazer.')
+        } finally {
+          setSalvando(false)
+        }
+      }
+      return
+    }
     const original = marca.original ?? item
 
     let diferencas: Diferenca[] = []
@@ -205,6 +308,7 @@ export function InventarioLocal() {
 
     if (diferencas.length === 0) {
       desmarcar(item.id)
+      await apagarConferencia(item.item, item.lote).catch(() => undefined)
       return
     }
 
@@ -225,6 +329,7 @@ export function InventarioLocal() {
         })
       }
       desmarcar(item.id)
+      await apagarConferencia(item.item, item.lote).catch(() => undefined)
       success('Marcação desfeita')
     } catch (error) {
       toastErro(error instanceof Error ? error.message : 'Não foi possível desfazer.')
@@ -374,6 +479,7 @@ export function InventarioLocal() {
                 key={item.id}
                 original={item}
                 marca={marcas[item.id]}
+                conferencia={conferenciaDe(item.item, item.lote)}
                 ocupado={salvando}
                 onConferido={() => conferido(item)}
                 onAusente={() => setAusentando(item)}
@@ -382,6 +488,32 @@ export function InventarioLocal() {
               />
             ))}
           </div>
+
+          {esperadosAqui.length > 0 && (
+            <section className="flex flex-col gap-3">
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-warning">
+                  Pelo histórico, deveriam estar aqui
+                </h3>
+                <p className="mt-1 text-sm text-text-secondary">
+                  Você já levou estes itens para {local} antes, mas o estoque importado ainda mostra outro
+                  local. Confira e salve para atualizar.
+                </p>
+              </div>
+              {esperadosAqui.map((item) => (
+                <LinhaItem
+                  key={item.id}
+                  original={item}
+                  marca={undefined}
+                  ocupado={salvando}
+                  onConferido={() => abrirFicha(item)}
+                  onAusente={() => setAusentando(item)}
+                  onEditar={() => abrirFicha(item)}
+                  onDesfazer={() => undefined}
+                />
+              ))}
+            </section>
+          )}
 
           {encontradosAqui.length > 0 && (
             <section className="flex flex-col gap-3">
@@ -395,6 +527,7 @@ export function InventarioLocal() {
                     key={original.id}
                     original={original}
                     marca={marca}
+                    conferencia={conferenciaDe(original.item, original.lote)}
                     ocupado={salvando}
                     onConferido={() => undefined}
                     onAusente={() => undefined}
@@ -439,6 +572,9 @@ export function InventarioLocal() {
                   className="rounded-2xl border border-border bg-bg-elevated p-4 text-left transition-colors hover:border-border-strong"
                 >
                   <MaterialBadge tipo={comoMaterial(item.material)} />
+                  <div className="mt-2 empty:hidden">
+                    <EtiquetaModificado item={item.item} lote={item.lote} />
+                  </div>
                   <p className="mt-2 text-lg font-extrabold text-text">
                     {formatarMedida(item.espessura, item.largura)}
                   </p>
@@ -488,6 +624,7 @@ export function InventarioLocal() {
 interface LinhaItemProps {
   original: EstoqueItem
   marca: Marca | undefined
+  conferencia?: Conferencia
   ocupado: boolean
   onConferido: () => void
   onAusente: () => void
@@ -498,13 +635,14 @@ interface LinhaItemProps {
 function LinhaItem({
   original,
   marca,
+  conferencia,
   ocupado,
   onConferido,
   onAusente,
   onEditar,
   onDesfazer,
 }: LinhaItemProps) {
-  const status = marca?.status
+  const status = marca?.status ?? conferencia?.status
   const item = marca?.item ?? original
   const alterado = marca?.item ? diferencasEntre(marca.original ?? original, marca.item).length : 0
 
@@ -527,7 +665,11 @@ function LinhaItem({
         {status === 'movido' && (
           <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-3 py-1 text-xs font-semibold text-warning">
             <MapPinned className="size-3.5" aria-hidden />
-            {marca?.de ? `Veio de ${marca.de}` : 'Sem local no ERP'}
+            {marca?.de
+              ? `Veio de ${marca.de}`
+              : conferencia?.localizacao
+                ? `Movido para ${conferencia.localizacao}`
+                : 'Sem local no ERP'}
           </span>
         )}
         {!status && (
@@ -536,6 +678,13 @@ function LinhaItem({
           </span>
         )}
       </div>
+
+      {conferencia && (
+        <p className="mt-2 text-xs text-text-muted">
+          {conferencia.status === 'ausente' ? 'Não encontrado' : 'Conferido'} em{' '}
+          {formatarDataHora(conferencia.conferidoEm)} · {conferencia.nome}
+        </p>
+      )}
 
       <p className="mt-3 text-xl font-extrabold tracking-tight text-text">
         {formatarMedida(item.espessura, item.largura)}
@@ -548,6 +697,9 @@ function LinhaItem({
         <p className="shrink-0 text-sm font-semibold text-text">
           {formatarQuantidade(item.quantidade)}
         </p>
+      </div>
+      <div className="mt-3 empty:hidden">
+        <HistoricoDoItem item={item.item} lote={item.lote} atual={item} maximo={1} titulo="Já modificado antes" />
       </div>
       {alterado > 0 && (
         <p className="mt-2 text-xs text-warning">

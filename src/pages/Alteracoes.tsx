@@ -8,15 +8,19 @@ import {
   Pencil,
   ScanLine,
   Search,
+  Trash2,
   type LucideIcon,
 } from 'lucide-react'
 import { ExportarCorrecoes } from '@/components/estoque/ExportarCorrecoes'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Input } from '@/components/ui/Input'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/hooks/useAuth'
 import { listarAlteracoes, type AlteracaoComUsuario } from '@/services/alteracoes'
+import { apagarModificacoes } from '@/services/historico'
 import { valorLegivel } from '@/utils/camposEstoque'
 import { isAdmin } from '@/utils/estoque'
 
@@ -30,7 +34,13 @@ interface GrupoHistorico {
   lote: string | null
   origem: string
   observacao: string | null
-  campos: { campo: string; anterior: string | null; novo: string | null }[]
+  campos: {
+    id: string
+    itemId: string | null
+    campo: string
+    anterior: string | null
+    novo: string | null
+  }[]
 }
 
 interface DiaHistorico {
@@ -93,6 +103,8 @@ function agrupar(linhas: AlteracaoComUsuario[]): GrupoHistorico[] {
       Math.abs(new Date(ultimo.created_at).getTime() - new Date(linha.created_at).getTime()) < 8000
 
     const campo = {
+      id: linha.id,
+      itemId: linha.item_id ?? null,
       campo: linha.campo_alterado,
       anterior: linha.valor_anterior,
       novo: linha.valor_novo,
@@ -154,6 +166,10 @@ function agruparPorDia(grupos: GrupoHistorico[]): DiaHistorico[] {
   return dias
 }
 
+function dataHoraDoGrupo(iso: string): string {
+  return `${new Date(iso).toLocaleDateString('pt-BR')} às ${hora(iso)}`
+}
+
 function hora(iso: string): string {
   return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 }
@@ -169,6 +185,37 @@ export function Alteracoes() {
   const [filtro, setFiltro] = useState<(typeof FILTROS)[number]['id']>('todos')
   const [busca, setBusca] = useState('')
   const [exportarAberto, setExportarAberto] = useState(false)
+  const [apagando, setApagando] = useState<GrupoHistorico | null>(null)
+  const [apagandoAgora, setApagandoAgora] = useState(false)
+  const { success, error: toastErro } = useToast()
+
+  async function confirmarApagar() {
+    if (!apagando) return
+    setApagandoAgora(true)
+    try {
+      const resultado = await apagarModificacoes(
+        apagando.campos.map((campo) => ({
+          id: campo.id,
+          itemId: campo.itemId,
+          campo: campo.campo,
+          anterior: campo.anterior,
+          novo: campo.novo,
+        })),
+      )
+      const ids = new Set(apagando.campos.map((campo) => campo.id))
+      setLinhas((atuais) => atuais.filter((linha) => !ids.has(linha.id)))
+      setApagando(null)
+      success(
+        resultado.revertidos > 0
+          ? 'Apagado do histórico e valor anterior restaurado'
+          : 'Apagado do histórico',
+      )
+    } catch (error) {
+      toastErro(error instanceof Error ? error.message : 'Não foi possível apagar.')
+    } finally {
+      setApagandoAgora(false)
+    }
+  }
 
   useEffect(() => {
     let ativo = true
@@ -401,12 +448,53 @@ export function Alteracoes() {
                   {grupo.observacao && (
                     <p className="mt-3 text-sm text-text-muted">{grupo.observacao}</p>
                   )}
+
+                  {admin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setApagando(grupo)
+                      }}
+                      className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-danger transition-colors hover:bg-danger-soft"
+                    >
+                      <Trash2 className="size-4" aria-hidden />
+                      Apagar esta modificação
+                    </button>
+                  )}
                 </Card>
               )
             })}
           </section>
         ))}
       </div>
+
+      {apagando && (
+        <ConfirmDialog
+          titulo="Apagar do histórico?"
+          confirmar="Apagar modificação"
+          perigo
+          carregando={apagandoAgora}
+          onConfirmar={() => void confirmarApagar()}
+          onCancelar={() => setApagando(null)}
+        >
+          <p className="text-sm text-text-secondary">
+            {apagando.item}
+            {apagando.lote ? ` · Lote ${apagando.lote}` : ''} · {dataHoraDoGrupo(apagando.created_at)}
+          </p>
+          <ul className="grid gap-1 text-sm text-text">
+            {apagando.campos.map((campo) => (
+              <li key={campo.id}>
+                <strong>{campo.campo}:</strong> {valorLegivel(campo.campo, campo.anterior)} →{' '}
+                {valorLegivel(campo.campo, campo.novo)}
+              </li>
+            ))}
+          </ul>
+          <p className="text-sm text-text-secondary">
+            Cada campo volta ao valor que tinha antes desta modificação, também no estoque importado.
+          </p>
+          <p className="text-xs text-text-muted">Isso não pode ser desfeito.</p>
+        </ConfirmDialog>
+      )}
 
       {!carregando && podeVerMais && (
         <Button variant="secondary" size="lg" fullWidth onClick={() => setLimite((n) => n + PAGINA)}>

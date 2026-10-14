@@ -4,6 +4,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { ToastProvider } from '@/components/ui/Toast'
 import { Alteracoes } from '@/pages/Alteracoes'
+import { Conciliacao } from '@/pages/Conciliacao'
 import { Configuracoes } from '@/pages/Configuracoes'
 import { Dashboard } from '@/pages/Dashboard'
 import { Estoque } from '@/pages/Estoque'
@@ -34,6 +35,7 @@ export default function App() {
               <Route path="estoque" element={<Estoque />} />
               <Route path="produto/:id" element={<Produto />} />
               <Route path="historico" element={<Alteracoes />} />
+              <Route path="conciliacao" element={<Conciliacao />} />
               <Route path="importar" element={<Importar />} />
               <Route path="inventario" element={<Inventario />} />
               <Route path="inventario/:local" element={<InventarioLocal />} />

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Pencil, ScanLine } from 'lucide-react'
 import { FichaItem } from '@/components/estoque/FichaItem'
+import { HistoricoDoItem } from '@/components/estoque/ModificacoesDoItem'
 import { MaterialBadge } from '@/components/estoque/MaterialBadge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -114,6 +115,10 @@ export function Produto() {
               {item.descricao}
             </p>
           )}
+
+          <div className="mt-5 empty:hidden">
+            <HistoricoDoItem item={item.item} lote={item.lote} atual={item} titulo="Já foi modificado antes" maximo={5} />
+          </div>
 
           <div className="mt-6 grid gap-4">
             <Campo rotulo="Item" valor={item.item} />

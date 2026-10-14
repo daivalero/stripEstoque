@@ -129,6 +129,27 @@ export async function listarOpcoesFiltro(importacaoId: string): Promise<OpcoesFi
   }
 }
 
+/** Todas as linhas do estoque importado (pagina de 1000 em 1000). */
+export async function listarTodosItens(importacaoId: string): Promise<EstoqueItem[]> {
+  const itens: EstoqueItem[] = []
+  const tamanho = 1000
+
+  for (let inicio = 0; ; inicio += tamanho) {
+    const { data, error } = await supabase
+      .from('estoque_itens')
+      .select('*')
+      .eq('importacao_id', importacaoId)
+      .order('item', { ascending: true })
+      .range(inicio, inicio + tamanho - 1)
+
+    if (error) throw new Error(mensagemErro(error))
+    itens.push(...((data ?? []) as EstoqueItem[]))
+    if (!data || data.length < tamanho) break
+  }
+
+  return itens
+}
+
 export interface OpcoesDeEscolha {
   fam_com: string[]
   localizacao: string[]

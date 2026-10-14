@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Card } from '@/components/ui/Card'
 import { MaterialBadge } from '@/components/estoque/MaterialBadge'
+import { EtiquetaModificado } from '@/components/estoque/ModificacoesDoItem'
 import type { EstoqueItem } from '@/types'
 import { comoMaterial, formatarMedida, formatarQuantidade } from '@/utils/estoque'
 
@@ -9,6 +10,9 @@ export function ItemCard({ item }: { item: EstoqueItem }) {
     <Link to={`/produto/${item.id}`} className="block">
       <Card interactive padding="md" className="h-full">
         <MaterialBadge tipo={comoMaterial(item.material)} />
+        <div className="mt-2 empty:hidden">
+          <EtiquetaModificado item={item.item} lote={item.lote} />
+        </div>
         <p className="mt-3 text-xl font-extrabold tracking-tight text-text">
           {formatarMedida(item.espessura, item.largura)}
         </p>
