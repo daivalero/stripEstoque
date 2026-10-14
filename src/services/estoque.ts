@@ -1,3 +1,4 @@
+import { avisarMudancaNoHistorico } from '@/services/historicoEventos'
 import { supabase } from '@/services/supabase'
 import { comoMaterial, termosDeBusca } from '@/utils/estoque'
 import type { EstoqueImportacao, EstoqueItem, EstoqueItemInput } from '@/types'
@@ -335,6 +336,7 @@ export async function apagarEstoqueTemporario(): Promise<number> {
     throw new Error('Seu usuário não tem permissão para apagar o estoque importado.')
   }
 
+  avisarMudancaNoHistorico()
   return ids.length
 }
 
@@ -394,6 +396,7 @@ export async function importarEstoque(params: {
 
     if (erroAtivar) throw new Error(mensagemErro(erroAtivar))
 
+    avisarMudancaNoHistorico()
     return { ...criada, status: 'ativa' }
   } catch (error) {
     await supabase.from('estoque_importacoes').delete().eq('id', criada.id)

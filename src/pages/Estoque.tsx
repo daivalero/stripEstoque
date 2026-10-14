@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Search } from 'lucide-react'
+import { EstoqueImportado } from '@/components/estoque/EstoqueImportado'
 import { ItemCard } from '@/components/estoque/ItemCard'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -121,10 +122,12 @@ export function Estoque() {
         <h2 className="text-[1.65rem] font-extrabold tracking-tight text-text">Estoque</h2>
         <p className="mt-1 text-[15px] text-text-secondary">
           {importacao
-            ? `${importacao.total_itens} itens · ${importacao.arquivo}`
+            ? `${importacao.total_itens} itens`
             : 'Nenhuma planilha importada'}
         </p>
       </div>
+
+      <EstoqueImportado />
 
       <div className="relative">
         <Search

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BarcodeScanner, lerCodigoDeArquivo } from '@/components/scanner/BarcodeScanner'
+import { EstoqueImportado } from '@/components/estoque/EstoqueImportado'
 import { ItemCard } from '@/components/estoque/ItemCard'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -90,6 +91,8 @@ export function Scanner() {
         </h2>
         <p className="mt-1 text-[15px] text-text-secondary">Aponte para a barra da etiqueta</p>
       </div>
+
+      <EstoqueImportado />
 
       {cameraAtiva && (
         <BarcodeScanner

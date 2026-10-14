@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Check, CircleHelp, MapPinned, Pencil, ScanLine, Undo2, X } from 'lucide-react'
+import { EstoqueImportado } from '@/components/estoque/EstoqueImportado'
 import { FichaItem } from '@/components/estoque/FichaItem'
 import { MaterialBadge } from '@/components/estoque/MaterialBadge'
 import { EtiquetaModificado, HistoricoDoItem } from '@/components/estoque/ModificacoesDoItem'
@@ -383,6 +384,8 @@ export function InventarioLocal() {
         <p className="text-sm text-text-secondary">Localização</p>
         <h2 className="text-[1.9rem] font-extrabold tracking-tight text-text">{local}</h2>
       </div>
+
+      <EstoqueImportado />
 
       {carregando && (
         <div className="flex flex-col gap-3">

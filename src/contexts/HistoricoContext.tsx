@@ -7,10 +7,14 @@ import {
   chaveDoItem,
   type Modificacao,
 } from '@/services/historico'
+import { buscarImportacaoAtiva } from '@/services/estoque'
 import { EVENTO_HISTORICO } from '@/services/historicoEventos'
+import type { EstoqueImportacao } from '@/types'
 
 interface HistoricoContextValor {
   carregado: boolean
+  /** Estoque importado que está ativo agora (arquivo e horário da importação). */
+  importacao: EstoqueImportacao | null
   /** Todas as modificações já feitas em itens, de qualquer estoque importado. */
   modificacoes: Modificacao[]
   /** Modificações de um item (mesmo item + lote), da mais nova para a mais antiga. */
@@ -31,14 +35,17 @@ export function HistoricoProvider({ children }: { children: ReactNode }) {
   const usuarioId = user?.id ?? null
   const [modificacoes, setModificacoes] = useState<Modificacao[]>([])
   const [conferencias, setConferencias] = useState<Map<string, Conferencia>>(new Map())
+  const [importacao, setImportacao] = useState<EstoqueImportacao | null>(null)
   const [carregado, setCarregado] = useState(false)
 
   const recarregar = useCallback(async () => {
     if (!usuarioId) return
-    const [historico, inventario] = await Promise.allSettled([
+    const [historico, inventario, ativa] = await Promise.allSettled([
       carregarModificacoes(),
       carregarConferencias(),
+      buscarImportacaoAtiva(),
     ])
+    if (ativa.status === 'fulfilled') setImportacao(ativa.value)
     // Se algo falhar, mantém o que já estava na tela (as telas próprias mostram o erro).
     if (historico.status === 'fulfilled') setModificacoes(historico.value)
     if (inventario.status === 'fulfilled') {
@@ -63,6 +70,7 @@ export function HistoricoProvider({ children }: { children: ReactNode }) {
   const valor = useMemo<HistoricoContextValor>(
     () => ({
       carregado,
+      importacao,
       modificacoes,
       porItem,
       conferencias,
@@ -70,7 +78,7 @@ export function HistoricoProvider({ children }: { children: ReactNode }) {
       recarregar,
       modificacoesDe: (item, lote) => porItem.get(chaveDoItem(item, lote)) ?? SEM_MODIFICACOES,
     }),
-    [carregado, modificacoes, porItem, conferencias, recarregar],
+    [carregado, importacao, modificacoes, porItem, conferencias, recarregar],
   )
 
   return <HistoricoContext.Provider value={valor}>{children}</HistoricoContext.Provider>

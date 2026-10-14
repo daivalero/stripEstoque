@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle2, ChevronRight, MapPin, Search } from 'lucide-react'
+import { EstoqueImportado } from '@/components/estoque/EstoqueImportado'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -80,6 +81,8 @@ export function Inventario() {
         <h2 className="text-[1.65rem] font-extrabold tracking-tight text-text">Inventário</h2>
         <p className="mt-1 text-[15px] text-text-secondary">Confira o estoque por localização</p>
       </div>
+
+      <EstoqueImportado />
 
       {carregando && (
         <div className="flex flex-col gap-3">

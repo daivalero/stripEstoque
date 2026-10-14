@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Pencil, ScanLine } from 'lucide-react'
+import { EstoqueImportado } from '@/components/estoque/EstoqueImportado'
 import { FichaItem } from '@/components/estoque/FichaItem'
 import { HistoricoDoItem } from '@/components/estoque/ModificacoesDoItem'
 import { MaterialBadge } from '@/components/estoque/MaterialBadge'
@@ -89,6 +90,8 @@ export function Produto() {
         <ArrowLeft className="size-4" aria-hidden />
         Estoque
       </Link>
+
+      <EstoqueImportado />
 
       {carregando && (
         <div className="space-y-3">

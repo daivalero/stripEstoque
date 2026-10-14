@@ -1,6 +1,7 @@
 import { useMemo, useState, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FileSpreadsheet, History } from 'lucide-react'
+import { EstoqueImportado } from '@/components/estoque/EstoqueImportado'
 import { MaterialBadge } from '@/components/estoque/MaterialBadge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -107,6 +108,8 @@ export function Importar() {
           A planilha original não é alterada. O sistema guarda uma cópia.
         </p>
       </div>
+
+      <EstoqueImportado />
 
       <Card gradientTop padding="lg">
         <div className="flex items-start gap-3">

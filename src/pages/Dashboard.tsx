@@ -11,6 +11,7 @@ import {
   Upload,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
+import { EstoqueImportado } from '@/components/estoque/EstoqueImportado'
 import { MaterialBadge } from '@/components/estoque/MaterialBadge'
 import { useAuth } from '@/hooks/useAuth'
 import { buscarImportacaoAtiva, contarPorMaterial } from '@/services/estoque'
@@ -114,6 +115,10 @@ export function Dashboard() {
         <h2 className="mt-1 text-[1.65rem] font-extrabold tracking-tight text-text lg:text-3xl">
           {displayName}
         </h2>
+      </motion.div>
+
+      <motion.div variants={item}>
+        <EstoqueImportado />
       </motion.div>
 
       <motion.div variants={item}>
