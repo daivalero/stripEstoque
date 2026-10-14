@@ -1,13 +1,13 @@
-import { MATERIAL_META, type MaterialTipo } from '@/types'
 import { cn } from '@/utils/cn'
+import { metaDoMaterial } from '@/utils/estoque'
 
 interface MaterialBadgeProps {
-  tipo: MaterialTipo
+  tipo: string | null | undefined
   className?: string
 }
 
 export function MaterialBadge({ tipo, className }: MaterialBadgeProps) {
-  const meta = MATERIAL_META[tipo]
+  const meta = metaDoMaterial(tipo)
 
   return (
     <span

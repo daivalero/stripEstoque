@@ -9,7 +9,7 @@ import type { EstoqueImportacao } from '@/types'
 type Opcao = 'hoje' | 'semana' | 'importacao' | 'tudo' | 'datas'
 
 const classeCampo =
-  'h-12 w-full rounded-[var(--radius-input)] border border-border bg-bg-elevated px-4 text-[15px] text-text focus:border-primary-soft focus:outline-none focus:ring-2 focus:ring-primary-soft/30'
+  'h-12 min-w-0 w-full rounded-[var(--radius-input)] border border-border bg-bg-elevated px-3 text-[15px] text-text focus:border-primary-soft focus:outline-none focus:ring-2 focus:ring-primary-soft/30 sm:px-4'
 
 function inicioDoDia(data: Date): Date {
   const copia = new Date(data)
@@ -17,25 +17,56 @@ function inicioDoDia(data: Date): Date {
   return copia
 }
 
-function dataLocal(texto: string, fimDoDia: boolean): Date | null {
-  if (!texto) return null
-  const [ano, mes, dia] = texto.split('-').map(Number)
-  if (!ano || !mes || !dia) return null
-  return fimDoDia ? new Date(ano, mes - 1, dia, 23, 59, 59, 999) : new Date(ano, mes - 1, dia)
+function dataHoraLocal(dataTexto: string, horaTexto: string, fimDoMinuto: boolean): Date | null {
+  if (!dataTexto || !horaTexto) return null
+  const [ano, mes, dia] = dataTexto.split('-').map(Number)
+  const [hora, minuto] = horaTexto.split(':').map(Number)
+  if (
+    !ano ||
+    !mes ||
+    !dia ||
+    !Number.isInteger(hora) ||
+    !Number.isInteger(minuto) ||
+    hora < 0 ||
+    hora > 23 ||
+    minuto < 0 ||
+    minuto > 59
+  ) {
+    return null
+  }
+
+  const data = new Date(
+    ano,
+    mes - 1,
+    dia,
+    hora,
+    minuto,
+    fimDoMinuto ? 59 : 0,
+    fimDoMinuto ? 999 : 0,
+  )
+  if (
+    data.getFullYear() !== ano ||
+    data.getMonth() !== mes - 1 ||
+    data.getDate() !== dia
+  ) {
+    return null
+  }
+  return data
 }
 
-function hojeTexto(): string {
-  const agora = new Date()
+function dataTexto(data = new Date()): string {
   const parte = (n: number) => String(n).padStart(2, '0')
-  return `${agora.getFullYear()}-${parte(agora.getMonth() + 1)}-${parte(agora.getDate())}`
+  return `${data.getFullYear()}-${parte(data.getMonth() + 1)}-${parte(data.getDate())}`
 }
 
 export function ExportarCorrecoes() {
   const { success, error: toastErro } = useToast()
   const [importacao, setImportacao] = useState<EstoqueImportacao | null>(null)
   const [opcao, setOpcao] = useState<Opcao>('hoje')
-  const [de, setDe] = useState(hojeTexto())
-  const [ate, setAte] = useState(hojeTexto())
+  const [de, setDe] = useState(dataTexto())
+  const [ate, setAte] = useState(dataTexto())
+  const [horaDe, setHoraDe] = useState('00:00')
+  const [horaAte, setHoraAte] = useState('23:59')
   const [exportando, setExportando] = useState(false)
 
   useEffect(() => {
@@ -55,18 +86,25 @@ export function ExportarCorrecoes() {
   function periodo(): PeriodoExportacao | null {
     const agora = new Date()
     switch (opcao) {
-      case 'hoje':
-        return { desde: inicioDoDia(agora).toISOString() }
+      case 'hoje': {
+        const inicio = dataHoraLocal(dataTexto(agora), horaDe, false)
+        const fim = dataHoraLocal(dataTexto(agora), horaAte, true)
+        if (!inicio || !fim || inicio > fim) return null
+        return { desde: inicio.toISOString(), ate: fim.toISOString() }
+      }
       case 'semana': {
         const inicio = inicioDoDia(agora)
         inicio.setDate(inicio.getDate() - 6)
-        return { desde: inicio.toISOString() }
+        const comHora = dataHoraLocal(dataTexto(inicio), horaDe, false)
+        const fim = dataHoraLocal(dataTexto(agora), horaAte, true)
+        if (!comHora || !fim || comHora > fim) return null
+        return { desde: comHora.toISOString(), ate: fim.toISOString() }
       }
       case 'importacao':
         return importacao ? { desde: importacao.created_at } : {}
       case 'datas': {
-        const inicio = dataLocal(de, false)
-        const fim = dataLocal(ate, true)
+        const inicio = dataHoraLocal(de, horaDe, false)
+        const fim = dataHoraLocal(ate, horaAte, true)
         if (!inicio || !fim) return null
         if (inicio > fim) return null
         return { desde: inicio.toISOString(), ate: fim.toISOString() }
@@ -79,7 +117,7 @@ export function ExportarCorrecoes() {
   async function exportar() {
     const escolhido = periodo()
     if (!escolhido) {
-      toastErro('Confira as datas: a data inicial precisa ser antes da final.')
+      toastErro('Confira as datas e horários: o início precisa ser antes do final.')
       return
     }
 
@@ -113,7 +151,7 @@ export function ExportarCorrecoes() {
           <option value="hoje">Hoje</option>
           <option value="semana">Últimos 7 dias</option>
           {importacao && <option value="importacao">Desde a importação atual</option>}
-          <option value="datas">Escolher dias</option>
+          <option value="datas">Escolher dias e horários</option>
           <option value="tudo">Todo o histórico</option>
         </select>
       </div>
@@ -122,7 +160,7 @@ export function ExportarCorrecoes() {
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
             <label htmlFor="exportar-de" className="text-sm font-medium text-text-secondary">
-              De
+              Data inicial
             </label>
             <input
               id="exportar-de"
@@ -135,7 +173,7 @@ export function ExportarCorrecoes() {
           </div>
           <div className="flex flex-col gap-1.5">
             <label htmlFor="exportar-ate" className="text-sm font-medium text-text-secondary">
-              Até
+              Data final
             </label>
             <input
               id="exportar-ate"
@@ -143,6 +181,35 @@ export function ExportarCorrecoes() {
               value={ate}
               min={de || undefined}
               onChange={(event) => setAte(event.target.value)}
+              className={classeCampo}
+            />
+          </div>
+        </div>
+      )}
+
+      {(opcao === 'hoje' || opcao === 'semana' || opcao === 'datas') && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="exportar-hora-de" className="text-sm font-medium text-text-secondary">
+              Horário inicial
+            </label>
+            <input
+              id="exportar-hora-de"
+              type="time"
+              value={horaDe}
+              onChange={(event) => setHoraDe(event.target.value)}
+              className={classeCampo}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="exportar-hora-ate" className="text-sm font-medium text-text-secondary">
+              Horário final
+            </label>
+            <input
+              id="exportar-hora-ate"
+              type="time"
+              value={horaAte}
+              onChange={(event) => setHoraAte(event.target.value)}
               className={classeCampo}
             />
           </div>

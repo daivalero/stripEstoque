@@ -174,6 +174,20 @@ function hora(iso: string): string {
   return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 }
 
+function dataHoraCurta(iso: string): string {
+  const data = new Date(iso)
+  const dia = data.toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
+  const horario = data.toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  return `${dia} · ${horario}`
+}
+
 export function Alteracoes() {
   const { profile } = useAuth()
   const admin = isAdmin(profile?.role)
@@ -267,9 +281,9 @@ export function Alteracoes() {
   const podeVerMais = linhas.length >= limite
 
   return (
-    <div className="mx-auto flex max-w-lg flex-col gap-5 animate-fade-in">
-      <div className="flex items-start justify-between gap-3">
-        <div>
+    <div className="mx-auto flex w-full min-w-0 max-w-lg flex-col gap-5 overflow-x-hidden animate-fade-in">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
           <h2 className="text-[1.65rem] font-extrabold tracking-tight text-text">Histórico</h2>
           <p className="mt-1 text-[15px] text-text-secondary">
             Registrado sozinho, com dia, hora e responsável
@@ -314,7 +328,9 @@ export function Alteracoes() {
           </Card>
           <Card padding="md">
             <p className="text-xs uppercase tracking-wide text-text-muted">Última correção</p>
-            <p className="mt-1 text-2xl font-extrabold text-text">{hora(linhas[0].created_at)}</p>
+            <p className="mt-1 text-base font-extrabold leading-tight text-text sm:text-lg">
+              {dataHoraCurta(linhas[0].created_at)}
+            </p>
             <p className="truncate text-sm text-text-secondary">{linhas[0].nome}</p>
           </Card>
         </div>
@@ -337,7 +353,7 @@ export function Alteracoes() {
               className="pl-12"
             />
           </div>
-          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1" role="tablist">
+          <div className="flex flex-wrap gap-2" role="tablist">
             {FILTROS.map((opcao) => (
               <button
                 key={opcao.id}
@@ -386,7 +402,10 @@ export function Alteracoes() {
         </Card>
       )}
 
-      <div className="flex flex-col gap-6">
+      <div
+        className="historico-scroll flex max-h-[min(68dvh,44rem)] min-w-0 flex-col gap-6 overflow-y-auto overflow-x-hidden pr-1 sm:pr-2"
+        aria-label="Lista do histórico de correções"
+      >
         {dias.map((dia) => (
           <section key={dia.chave} className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3 px-1">
@@ -409,14 +428,16 @@ export function Alteracoes() {
                       <Icone className="size-5" aria-hidden />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="min-w-0 truncate text-base font-bold text-text">{grupo.item}</p>
-                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-bg-muted px-2.5 py-1 text-xs font-semibold text-text-secondary">
+                      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+                        <p className="min-w-0 basis-24 break-words text-base font-bold text-text">
+                          {grupo.item}
+                        </p>
+                        <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-bg-muted px-2.5 py-1 text-[11px] font-semibold text-text-secondary">
                           <Clock className="size-3" aria-hidden />
-                          {hora(grupo.created_at)}
+                          {dataHoraCurta(grupo.created_at)}
                         </span>
                       </div>
-                      <p className="text-sm text-text-secondary">
+                      <p className="break-words text-sm text-text-secondary">
                         {grupo.lote ? `Lote ${grupo.lote} · ` : ''}
                         {grupo.nome} · {origem.rotulo}
                       </p>
@@ -433,11 +454,11 @@ export function Alteracoes() {
                           {campo.campo}
                         </p>
                         <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                          <span className="rounded-lg bg-danger-soft px-2.5 py-1 text-sm font-medium text-danger line-through decoration-danger/60">
+                          <span className="max-w-full break-words rounded-lg bg-danger-soft px-2.5 py-1 text-sm font-medium text-danger line-through decoration-danger/60 [overflow-wrap:anywhere]">
                             {valorLegivel(campo.campo, campo.anterior)}
                           </span>
                           <ArrowRight className="size-4 shrink-0 text-text-muted" aria-hidden />
-                          <span className="rounded-lg bg-success-soft px-2.5 py-1 text-sm font-bold text-success">
+                          <span className="max-w-full break-words rounded-lg bg-success-soft px-2.5 py-1 text-sm font-bold text-success [overflow-wrap:anywhere]">
                             {valorLegivel(campo.campo, campo.novo)}
                           </span>
                         </div>

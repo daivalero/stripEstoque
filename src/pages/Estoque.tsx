@@ -8,8 +8,8 @@ import { Input } from '@/components/ui/Input'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useAuth } from '@/hooks/useAuth'
 import { buscarImportacaoAtiva, listarItens, listarOpcoesFiltro, type OpcoesFiltro } from '@/services/estoque'
-import { MATERIAL_META, type EstoqueImportacao, type EstoqueItem, type MaterialTipo } from '@/types'
-import { formatarNumero, isAdmin } from '@/utils/estoque'
+import type { EstoqueImportacao, EstoqueItem } from '@/types'
+import { formatarNumero, isAdmin, rotuloMaterial } from '@/utils/estoque'
 
 export function Estoque() {
   const { profile } = useAuth()
@@ -267,11 +267,6 @@ export function Estoque() {
       )}
     </div>
   )
-}
-
-function rotuloMaterial(valor: string): string {
-  if (valor in MATERIAL_META) return MATERIAL_META[valor as MaterialTipo].label
-  return valor
 }
 
 function FiltroSelect({
