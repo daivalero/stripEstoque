@@ -44,18 +44,57 @@ export function normalizarTexto(value: unknown): string | null {
   return texto
 }
 
+const LOTE_COM_BARRA = /^(\d+)\/(\d+)([A-Z]*)$/i
+/** Lote digitado ou da planilha sem barra (ex.: 655867). Evita códigos curtos tipo 017. */
+const LOTE_SEM_BARRA = /^(\d{4,})([A-Z]*)$/i
+
+/** Lote da etiqueta costuma ser 655/867; na planilha às vezes vem sem barra (655867). */
+function variantesDeLote(lote: string): string[] {
+  const texto = lote.trim()
+  if (!texto) return []
+
+  const comBarra = texto.match(LOTE_COM_BARRA)
+  if (comBarra) {
+    const [, esquerda, direita, sufixo] = comBarra
+    const letra = (sufixo ?? '').toUpperCase()
+    return [`${esquerda}/${direita}${letra}`, `${esquerda}${direita}${letra}`]
+  }
+
+  const soDigitos = texto.match(LOTE_SEM_BARRA)
+  if (soDigitos) {
+    const [, digitos, sufixo] = soDigitos
+    const letra = (sufixo ?? '').toUpperCase()
+    const variantes = new Set<string>([`${digitos}${letra}`])
+    // Ex.: 655867 → 6/55867, 65/5867, 655/867, 6558/67, 65586/7
+    for (let corte = 1; corte < digitos.length; corte += 1) {
+      variantes.add(`${digitos.slice(0, corte)}/${digitos.slice(corte)}${letra}`)
+    }
+    return [...variantes]
+  }
+
+  return []
+}
+
+function adicionarTermosDeLote(destino: Set<string>, valor: string) {
+  for (const variante of variantesDeLote(valor)) {
+    destino.add(variante)
+    destino.add(variante.toUpperCase())
+  }
+}
+
 export function termosDeBusca(codigo: string): string[] {
   const termo = codigo.trim()
   const termos = new Set<string>()
   if (!termo) return []
   termos.add(termo)
 
+  // Código inteiro é só o lote (digitado ou lido sem o restante da etiqueta).
+  adicionarTermosDeLote(termos, termo)
+
+  // Etiqueta 017;655/867;peso → extrai o lote do meio (só partes com barra).
   for (const parte of termo.split(/[;|]/)) {
     const texto = parte.trim()
-    if (/^\d+\/\d+[A-Z]*$/i.test(texto)) {
-      termos.add(texto)
-      termos.add(texto.toUpperCase())
-    }
+    if (LOTE_COM_BARRA.test(texto)) adicionarTermosDeLote(termos, texto)
   }
 
   const pedacos = termo.split('/').map((parte) => parte.trim())
@@ -65,17 +104,19 @@ export function termosDeBusca(codigo: string): string[] {
     /^\d+$/.test(pedacos[1]) &&
     /^\d+[A-Z]*$/i.test(pedacos[2])
   ) {
-    termos.add(`${pedacos[1]}/${pedacos[2]}`.toUpperCase())
+    adicionarTermosDeLote(termos, `${pedacos[1]}/${pedacos[2]}`)
   }
 
   return [...termos]
 }
 
 export function loteDaEtiqueta(codigo: string): string | null {
-  return (
-    termosDeBusca(codigo).find((termo) => /^\d+\/\d+[A-Z]*$/i.test(termo))?.toUpperCase() ??
-    null
-  )
+  const comBarra = termosDeBusca(codigo).find((termo) => LOTE_COM_BARRA.test(termo))
+  if (comBarra) return comBarra.toUpperCase()
+
+  // Digitado só com números (ex.: 655867): mostra como lote na mensagem de erro.
+  const soLote = codigo.trim().match(LOTE_SEM_BARRA)
+  return soLote ? `${soLote[1]}${(soLote[2] ?? '').toUpperCase()}` : null
 }
 
 export function normalizarLocalizacao(value: unknown): string | null {

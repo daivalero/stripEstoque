@@ -56,9 +56,19 @@ export async function listarItens(params: {
     .range(inicio, fim)
 
   if (termo) {
-    query = query.or(
-      `item.ilike.%${termo}%,lote.ilike.%${termo}%,localizacao.ilike.%${termo}%,descricao.ilike.%${termo}%`,
-    )
+    const filtros = [
+      `item.ilike.%${termo}%`,
+      `lote.ilike.%${termo}%`,
+      `localizacao.ilike.%${termo}%`,
+      `descricao.ilike.%${termo}%`,
+    ]
+    // 655867 na busca também acha lote 655/867 (e o contrário).
+    for (const variante of termosDeBusca(termo)) {
+      if (variante.toLowerCase() === termo.toLowerCase()) continue
+      if (!/^[\d/A-Z]+$/i.test(variante)) continue
+      filtros.push(`lote.eq."${variante.replace(/"/g, '')}"`)
+    }
+    query = query.or(filtros.join(','))
   }
 
   if (params.material) query = query.eq('material', params.material)
